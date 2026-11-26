@@ -55,7 +55,7 @@ impl Gun {
         if up {
             self.a = A_START;
         }
-        self.a = self.a.max(A_MIN).min(A_MAX);
+        self.a = crate::p8math::mid(A_MIN, self.a, A_MAX);
     }
 
     /// Where the aimer is drawn: `(sin(a), cos(a)) * 20 + (x, y)`.
