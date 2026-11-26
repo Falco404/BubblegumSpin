@@ -91,6 +91,16 @@ impl Fb {
         writer.write_image_data(&rgb)?;
         Ok(())
     }
+
+    /// The same pixels as RGBA8, for uploading to a GPU texture.
+    pub fn to_rgba8(&self) -> Vec<u8> {
+        let mut rgba = Vec::with_capacity(self.px.len() * 4);
+        for &c in self.px.iter() {
+            let [r, g, b] = self.pal.rgb(c);
+            rgba.extend_from_slice(&[r, g, b, 255]);
+        }
+        rgba
+    }
 }
 
 #[cfg(test)]
@@ -179,7 +189,7 @@ mod tests {
         let path = std::env::temp_dir().join("bubblegum-spin-fb-test.png");
         fb.to_png(&path).unwrap();
 
-        let mut dec = png::Decoder::new(std::fs::File::open(&path).unwrap());
+        let dec = png::Decoder::new(std::fs::File::open(&path).unwrap());
         let mut reader = dec.read_info().unwrap();
         let mut buf = vec![0u8; reader.output_buffer_size()];
         let info = reader.next_frame(&mut buf).unwrap();
@@ -198,7 +208,7 @@ mod tests {
         let path = std::env::temp_dir().join("bubblegum-spin-fb-pal-test.png");
         fb.to_png(&path).unwrap();
 
-        let mut dec = png::Decoder::new(std::fs::File::open(&path).unwrap());
+        let dec = png::Decoder::new(std::fs::File::open(&path).unwrap());
         let mut reader = dec.read_info().unwrap();
         let mut buf = vec![0u8; reader.output_buffer_size()];
         reader.next_frame(&mut buf).unwrap();
