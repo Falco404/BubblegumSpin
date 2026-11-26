@@ -60,7 +60,6 @@ The original cart is in assets/upstream (gitignored), and notes are in reference
 - For visual changes, render frames to PNG headless where possible and
   describe or attach them in the PR.
 - The framework must target Windows and Linux now and Android later.
-- CI must produce Windows and Linux builds I can download. I add the
-  workflow file myself; propose its content in the PR description.
+- CI must produce Windows and Linux builds I can download.
 - Test command: <fill in once the approach is chosen>
 - Credit Bee_Randon in the README.
