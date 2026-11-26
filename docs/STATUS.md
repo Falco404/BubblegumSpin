@@ -11,13 +11,14 @@ matching/rooting/pool. 72 tests green. Still no physics, no screen content.
 - #19 — decisions recorded, milestones filed as issues #11–#18.
 
 ## In progress
-- `hermes/port-m2`: `grid.rs`, generated `consts.rs`, `board.rs`,
-  `bin/board_dump`, `tools/extract_level.py`.
+- `hermes/ci`: `.github/workflows/build.yml` — every merge to `main` (and every
+  PR) now builds Windows + Linux binaries and publishes them as artifacts.
+- `hermes/port-m2` (PR #21) holds the M2 code this branch is stacked on.
 
 ## Next steps (max 3)
-1. Merge M2 after review.
-2. M3 (issue #13): spin/aim maths and the first on-screen board.
-3. M4 (issue #14): fire, bounce, stick, spin — the first playable shot.
+1. Merge #21 (M2), then this CI PR — both are green locally.
+2. Download the `bubblegum-spin-windows` artifact and confirm the window opens.
+3. M3 (issue #13): spin/aim maths and the first on-screen board.
 
 ## Gotchas (max 8, one line each; delete when fixed)
 - PICO-8 `sin`/`atan2` are y-inverted: `sin(0.25) = -1`, `atan2(0,-1) = 0.25`.

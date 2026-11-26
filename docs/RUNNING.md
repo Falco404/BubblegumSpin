@@ -49,3 +49,17 @@ cargo run
 
 The upstream cart in `assets/upstream/` is gitignored and is not needed to build
 or test anything in M1.
+
+## Downloading a build instead of compiling
+
+`.github/workflows/build.yml` runs on every push to `main` and on every pull
+request, on `windows-latest` and `ubuntu-latest`. To get a binary:
+
+1. Open the repo's **Actions** tab and pick the newest `build` run.
+2. At the bottom of the run page, download the **Artifacts**:
+   `bubblegum-spin-windows` (a zip containing `bubblegum-spin.exe`) or
+   `bubblegum-spin-linux` (`bubblegum-spin`).
+3. Unzip and run the binary. Until M6 the game loads no data files, so the bare
+   executable is enough; after that a packaged release (M8) is the way.
+
+Artifacts need a GitHub login to download and expire after 90 days.
