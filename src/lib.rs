@@ -5,4 +5,5 @@
 //! and the audio device.
 
 pub mod fixed;
+pub mod gfx;
 pub mod p8math;
