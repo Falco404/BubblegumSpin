@@ -92,6 +92,25 @@ impl Fb {
         Ok(())
     }
 
+    /// PICO-8 `circfill(x, y, r, c)`: a filled disc of radius `r`.
+    ///
+    /// PICO-8's own circle routine uses a slightly different pixel pattern at
+    /// some radii; this port uses the plain "`dx² + dy² <= r²`" rule, which
+    /// matches PICO-8 exactly at r = 0, 1 and 4 (the radii this game uses) and is
+    /// only a placeholder for the real gumball sprites anyway (M6).
+    pub fn circfill(&mut self, x: i32, y: i32, r: i32, c: u8) {
+        if r < 0 {
+            return;
+        }
+        for dy in -r..=r {
+            for dx in -r..=r {
+                if dx * dx + dy * dy <= r * r {
+                    self.pset(x + dx, y + dy, c);
+                }
+            }
+        }
+    }
+
     /// The same pixels as RGBA8, for uploading to a GPU texture.
     pub fn to_rgba8(&self) -> Vec<u8> {
         let mut rgba = Vec::with_capacity(self.px.len() * 4);
@@ -180,6 +199,60 @@ mod tests {
         let mut fb = Fb::new();
         fb.rectfill(200, 200, 300, 300, 3); // entirely off-screen
         assert!(fb.px.iter().all(|&p| p == 0));
+    }
+
+    fn count(fb: &Fb, c: u8) -> usize {
+        fb.px.iter().filter(|&&p| p == c).count()
+    }
+
+    #[test]
+    fn circfill_radius_zero_is_one_pixel() {
+        let mut fb = Fb::new();
+        fb.circfill(10, 10, 0, 7);
+        assert_eq!(count(&fb, 7), 1);
+        assert_eq!(fb.pget(10, 10), 7);
+    }
+
+    #[test]
+    fn circfill_radius_one_is_a_five_pixel_cross() {
+        // PICO-8: circfill(x,y,1) covers the centre and its four neighbours.
+        let mut fb = Fb::new();
+        fb.circfill(10, 10, 1, 7);
+        assert_eq!(count(&fb, 7), 5);
+        for (dx, dy) in [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)] {
+            assert_eq!(fb.pget(10 + dx, 10 + dy), 7, "missing ({dx},{dy})");
+        }
+        assert_eq!(fb.pget(11, 11), 0);
+    }
+
+    #[test]
+    fn circfill_radius_four_is_a_49_pixel_disc() {
+        // Lattice points with dx^2 + dy^2 <= 16: 49 of them, 9 wide.
+        let mut fb = Fb::new();
+        fb.circfill(20, 20, 4, 7);
+        assert_eq!(count(&fb, 7), 49);
+        assert_eq!(fb.pget(16, 20), 7);
+        assert_eq!(fb.pget(24, 20), 7);
+        assert_eq!(fb.pget(16, 16), 0, "corner is outside the disc");
+    }
+
+    #[test]
+    fn circfill_clips_at_the_edges() {
+        let mut fb = Fb::new();
+        fb.circfill(0, 0, 4, 7); // must not panic or wrap
+        assert_eq!(fb.pget(0, 0), 7);
+        fb.circfill(127, 127, 4, 9);
+        assert_eq!(fb.pget(127, 127), 9);
+    }
+
+    #[test]
+    fn circfill_draws_over_what_is_there() {
+        let mut fb = Fb::new();
+        fb.clear(1);
+        fb.circfill(64, 64, 2, 8);
+        assert_eq!(fb.pget(64, 64), 8);
+        assert_eq!(fb.pget(62, 64), 8);
+        assert_eq!(fb.pget(67, 64), 1);
     }
 
     #[test]
