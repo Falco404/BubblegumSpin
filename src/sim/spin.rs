@@ -29,6 +29,42 @@ pub fn rpx2px(x: Fix, y: Fix, var: Fix) -> (Fix, Fix) {
     (mul(cos(ang), r) + C, mul(sin(ang), r) + C)
 }
 
+/// cart `update_spinner()`: `var += torque`, then decay.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Spin {
+    /// Accumulated rotation, in turns (the cart's `var`).
+    pub var: Fix,
+    /// Rotational velocity (the cart's `torque`), decays every frame.
+    pub torque: Fix,
+}
+
+/// The cart's `0.0004` threshold, quantised to 16.16: 26/65536 = 0.0003967.
+pub const TORQUE_MIN: Fix = 26;
+/// The cart's `0.96` decay, quantised to 16.16.
+pub const TORQUE_DECAY: Fix = 62_914;
+
+impl Spin {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// One frame of `update_spinner()`.
+    pub fn step(&mut self) {
+        self.var = self.var.wrapping_add(self.torque);
+        if self.torque.abs() > TORQUE_MIN {
+            self.torque = mul(self.torque, TORQUE_DECAY);
+        } else {
+            self.torque = 0;
+        }
+    }
+
+    /// Add a kick to the rotational velocity (the cart does `var += torque` only
+    /// after `calc_torque` has replaced `torque`; see M4).
+    pub fn add_torque(&mut self, torque: Fix) {
+        self.torque = self.torque.wrapping_add(torque);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -109,5 +145,51 @@ mod tests {
             let (rx, ry) = px2rpx(from_f64(64.0), from_f64(64.0), from_f64(t));
             assert_eq!((to_int(rx), to_int(ry)), (64, 64));
         }
+    }
+
+    #[test]
+    fn one_step_adds_the_torque_to_the_angle() {
+        let mut spin = Spin::new();
+        spin.torque = from_f64(0.05); // 3276 in 16.16
+        spin.step();
+        assert_eq!(spin.var, 3_276);
+        // 0.05 * 0.96 = 0.048 -> 3144 (quantised)
+        assert_eq!(spin.torque, 3_144);
+    }
+
+    #[test]
+    fn decay_stops_and_snaps_to_zero() {
+        // The cart keeps decaying while |torque| > 0.0004 (26 in 16.16) and then
+        // sets it to exactly 0. Hand-computed with the same fixed-point rules:
+        // zero is reached on frame 110.
+        let mut spin = Spin::new();
+        spin.torque = from_f64(0.05);
+        let mut frames = 0;
+        while spin.torque != 0 && frames < 500 {
+            spin.step();
+            frames += 1;
+        }
+        assert_eq!(frames, 110);
+        assert_eq!(spin.var, 79_886); // 1.21896 turns
+    }
+
+    #[test]
+    fn sixty_frames_of_decay_have_not_stopped_yet() {
+        let mut spin = Spin::new();
+        spin.torque = from_f64(0.05);
+        for _ in 0..60 {
+            spin.step();
+        }
+        // The plan guessed "60 steps ends at zero"; it does not. Measured:
+        assert_eq!((spin.torque, spin.var), (271, 74_338));
+    }
+
+    #[test]
+    fn the_angle_wraps_and_never_panics() {
+        let mut spin = Spin::new();
+        spin.var = Fix::MAX;
+        spin.torque = Fix::MAX;
+        spin.step(); // must not panic in debug builds
+        assert!(spin.torque != Fix::MAX);
     }
 }
