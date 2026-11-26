@@ -7,6 +7,6 @@
 pub mod board;
 pub mod consts;
 pub mod fixed;
-pub mod grid;
 pub mod gfx;
+pub mod grid;
 pub mod p8math;

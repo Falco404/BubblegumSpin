@@ -73,12 +73,36 @@ def render(nums: list[int]) -> str:
         "pub const LEVEL: [u8; 525] = [",
     ]
     for r, row in enumerate(rows):
-        values = ", ".join(f"{v:>2}" for v in row)
+        values = ", ".join(str(v) for v in row)
         lines.append(f"    // row {r:2d}: {ascii_row(row)}")
         lines.append(f"    {values},")
     lines.append("];")
     lines.append("")
-    lines.append(TESTS)
+    lines.append(
+        """\
+/// The level as ASCII rows: `.` empty, `W` the 7 wall, `8` the anchor gumball,
+/// `9` an ordinary gumball. One string per row, 21 characters each.
+///
+/// Same glyphs as the row comments above, so `cargo run --bin board_dump` and
+/// this file can be compared at a glance.
+pub fn level_ascii() -> Vec<String> {
+    LEVEL
+        .chunks(21)
+        .map(|row| {
+            row.iter()
+                .map(|&v| match v {
+                    0 => '.',
+                    7 => 'W',
+                    8 => '8',
+                    _ => '9',
+                })
+                .collect()
+        })
+        .collect()
+}
+"""
+    )
+    lines.append(TESTS.rstrip("\n"))
     return "\n".join(lines) + "\n"
 
 
@@ -116,12 +140,31 @@ mod tests {
             8 => '8',
             _ => '9',
         };
-        let row = |r: usize| -> String { LEVEL[r * 21..(r + 1) * 21].iter().map(|&v| glyph(v)).collect() };
+        let row = |r: usize| -> String {
+            LEVEL[r * 21..(r + 1) * 21]
+                .iter()
+                .map(|&v| glyph(v))
+                .collect()
+        };
         assert_eq!(row(0), ".....................");
         assert_eq!(row(8), "........WWWWW........");
         assert_eq!(row(12), "......W9998999W......");
         assert_eq!(row(16), "........WWWWW........");
         assert_eq!(row(24), ".....................");
+    }
+
+    #[test]
+    fn level_ascii_is_25_rows_of_21_columns() {
+        let rows = level_ascii();
+        assert_eq!(rows.len(), 25);
+        for (r, row) in rows.iter().enumerate() {
+            assert_eq!(row.chars().count(), 21, "row {r} is {row:?}");
+            assert!(
+                row.chars().all(|c| ".*W89".contains(c)),
+                "row {r} has an unexpected glyph: {row:?}"
+            );
+        }
+        assert_eq!(rows[12], "......W9998999W......");
     }
 }
 """
