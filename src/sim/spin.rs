@@ -5,7 +5,7 @@
 //! through `px2rpx`, and maps a flying bubble back through `rpx2px` when it
 //! needs a cell. So the spin changes where a bubble actually sticks.
 
-use crate::fixed::{int, mul, Fix};
+use crate::fixed::{div, int, mul, Fix};
 use crate::p8math::{atan2, cos, sin, sqrt};
 
 /// The screen centre the mass rotates around: `(64, 64)`.
@@ -65,10 +65,60 @@ impl Spin {
     }
 }
 
+/// cart `calc_torque(_b)`: how hard a bubble hitting at `(x, y)` moving
+/// `(dx, dy)` twists the mass.
+///
+/// The lever arm is the angle from the bubble to the centre, the force is the
+/// angle of travel, and the kick is `r * sin(a - b) / 70`, divided by the number
+/// of gumballs so a lighter board spins harder. That last division is the game's
+/// signature feel — players complained about "spinning wildly" and it is
+/// intended.
+pub fn calc_torque(x: Fix, y: Fix, dx: Fix, dy: Fix, mass: usize) -> Fix {
+    // Angle of the lever arm: from the bubble to the centre.
+    let a = atan2(C - x, C - y);
+    // Angle of the force: the direction the bubble is travelling.
+    let b = atan2(x - (x + dx), y - (y + dy));
+    let theta = a.wrapping_sub(b);
+    let r = sqrt(mul(C - x, C - x) + mul(C - y, C - y));
+    let tau = div(mul(r, sin(theta)), int(70));
+    div(tau, int(mass as i32))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::fixed::{from_f64, to_int};
+
+    #[test]
+    fn a_shot_through_the_centre_gives_no_torque() {
+        // Bubble 24 px above the centre, moving straight down: the lever arm and
+        // the force point the same way, so sin(theta) = 0.
+        let tau = calc_torque(from_f64(64.0), from_f64(40.0), 0, from_f64(2.5), 60);
+        assert!(tau.abs() <= 64, "tau = {tau}");
+    }
+
+    #[test]
+    fn a_shot_past_the_centre_spins_the_mass() {
+        // 16 px to the right, still moving down: an off-centre hit.
+        let tau = calc_torque(from_f64(80.0), from_f64(40.0), 0, from_f64(2.5), 60);
+        assert!(tau.abs() > 64, "tau = {tau}");
+    }
+
+    #[test]
+    fn more_mass_means_less_spin() {
+        let light = calc_torque(from_f64(80.0), from_f64(40.0), 0, from_f64(2.5), 30);
+        let heavy = calc_torque(from_f64(80.0), from_f64(40.0), 0, from_f64(2.5), 60);
+        assert_eq!(heavy, -249); // pinned: 16.16, i.e. -0.0038 turns per frame
+        // Fixed-point division truncates, so this is twice within one LSB.
+        assert!((light - heavy * 2).abs() <= 1, "{light} vs {heavy}");
+    }
+
+    #[test]
+    fn the_two_sides_spin_in_opposite_directions() {
+        let right = calc_torque(from_f64(80.0), from_f64(40.0), 0, from_f64(2.5), 60);
+        let left = calc_torque(from_f64(48.0), from_f64(40.0), 0, from_f64(2.5), 60);
+        assert_ne!(right.signum(), left.signum());
+    }
 
     /// PICO-8's angles are 0..1 turns and y is inverted, so a quarter turn
     /// rotates a point to the right of the centre to above it: (72,64) -> (64,56).
