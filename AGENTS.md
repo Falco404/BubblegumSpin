@@ -2,7 +2,7 @@
 
 Native port of the PICO-8 game Bubblegum Spin (v1.1, by Bee_Randon). It
 should play like the original on Windows and Linux; Android maybe later.
-The original cart and notes are in reference/ (read-only, never edit).
+The original cart is in assets/upstream (gitignored), and notes are in reference/ (read-only, never edit).
 
 ## Rules
 - Never push to main. Work on branches `hermes/<topic>` and open a PR.
