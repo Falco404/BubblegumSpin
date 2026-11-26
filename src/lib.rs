@@ -5,3 +5,4 @@
 //! and the audio device.
 
 pub mod fixed;
+pub mod p8math;
