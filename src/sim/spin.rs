@@ -109,7 +109,7 @@ mod tests {
         let light = calc_torque(from_f64(80.0), from_f64(40.0), 0, from_f64(2.5), 30);
         let heavy = calc_torque(from_f64(80.0), from_f64(40.0), 0, from_f64(2.5), 60);
         assert_eq!(heavy, -249); // pinned: 16.16, i.e. -0.0038 turns per frame
-        // Fixed-point division truncates, so this is twice within one LSB.
+                                 // Fixed-point division truncates, so this is twice within one LSB.
         assert!((light - heavy * 2).abs() <= 1, "{light} vs {heavy}");
     }
 
