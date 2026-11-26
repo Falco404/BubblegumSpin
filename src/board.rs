@@ -9,10 +9,10 @@
 //! >= 10, which is what keeps animating cells out of the matching and rooting
 //! passes during the frames they animate.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::consts::LEVEL;
-use crate::grid::CENTER;
+use crate::grid::{neighbors, CENTER};
 use crate::p8math::Rng;
 
 /// The white anchor cell's value.
@@ -78,8 +78,28 @@ impl Board {
     /// cart `get_matching(i, col)`: every cell connected to `i` with exactly that
     /// value. Sorted ascending, so callers get the same order as the cart's
     /// `pairs()` replacement.
-    pub fn get_matching(&self, _i: u16, _col: u16) -> Vec<u16> {
-        Vec::new() // stub, implemented in m2.5
+    ///
+    /// The cart recurses through `neighbors()` including the `nil` ones; here the
+    /// recursion stops wherever `get()` returns `None`, which is the same thing.
+    pub fn get_matching(&self, i: u16, col: u16) -> Vec<u16> {
+        let mut matches = BTreeSet::new();
+        let mut visited = BTreeSet::new();
+        self.mtch_rec(i, col, &mut matches, &mut visited);
+        matches.into_iter().collect()
+    }
+
+    /// cart `get_mtch_rec(i, col, m, v)`.
+    fn mtch_rec(&self, i: u16, col: u16, m: &mut BTreeSet<u16>, v: &mut BTreeSet<u16>) {
+        if !v.insert(i) {
+            return;
+        }
+        if self.get(i) != Some(col) {
+            return;
+        }
+        m.insert(i);
+        for n in neighbors(i).into_iter().flatten() {
+            self.mtch_rec(n, col, m, v);
+        }
     }
 
     /// cart `get_unrooted()`: settled cells not reachable from the anchor.
