@@ -43,6 +43,9 @@ pub fn neighbors(i: u16) -> [Option<u16>; 6] {
     let x = (i % COLS) as i32;
     let y = (i / COLS) as i32;
     let offx = if y % 2 == 1 { 1 } else { 0 };
+    // The bounds test is written the way the cart writes it. Rewriting it as a
+    // range check hides that `x > 21` (not `>= 21`) is the bug being preserved.
+    #[allow(clippy::manual_range_contains)]
     let n2b = |x: i32, y: i32| -> Option<u16> {
         if x < 0 || x > 21 || y < 0 {
             return None;

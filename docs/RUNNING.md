@@ -18,12 +18,26 @@ Everything is plain `cargo`; there are no scripts and no environment variables.
 |---|---|---|
 | Window (4x scale, 512x512) | `cargo run` | palette test card |
 | Headless screenshot | `cargo run --bin shot` | `out/m1.png` (128x128 RGB) |
+| Level as ASCII | `cargo run --bin board_dump` | 25 rows of `.` `W` `8` `9` |
 | Tests | `cargo test` | `test result: ok. ...` |
 | Lints / format | `cargo clippy --all-targets`, `cargo fmt --check` | no output = clean |
 | Release build | `cargo build --release` | `target/release/bubblegum-spin[.exe]` |
 
 `out/` is gitignored. Screenshots are the primary visual evidence in PRs: render
 with `shot`, attach the PNG, and quote the size.
+
+## Generated code
+
+`src/consts.rs` is generated from the cart, not hand-written:
+
+```
+python3 tools/extract_level.py           # rewrite src/consts.rs from the cart
+python3 tools/extract_level.py --check    # exit 1 if it is stale
+```
+
+It needs `assets/upstream/bubblegum_spin.p8` (or the `_code.txt` dump). The
+generated file is rustfmt-clean as produced, so `cargo fmt --check` stays happy
+without reformatting it.
 
 ## Windows quick start
 

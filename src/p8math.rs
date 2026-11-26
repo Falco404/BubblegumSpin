@@ -240,8 +240,8 @@ mod tests {
             seen[r.colour(6) as usize] += 1;
         }
         assert_eq!(seen[0], 0, "colour 0 is not a real colour");
-        for c in 1..=6 {
-            assert!(seen[c] > 50, "colour {c} came up {n} times", n = seen[c]);
+        for (colour, &n) in seen.iter().enumerate().skip(1) {
+            assert!(n > 50, "colour {colour} came up {n} times");
         }
     }
 }

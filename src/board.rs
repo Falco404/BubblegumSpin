@@ -5,9 +5,9 @@
 //! cell order — the deterministic choice recorded in `docs/decisions.md`.
 //!
 //! Cell values are the cart's own encoding, kept as-is: the colour is `v % 10`,
-//! and popping/exploding add 10/300 on top (M4 onward). `keys()` skips values
-//! >= 10, which is what keeps animating cells out of the matching and rooting
-//! passes during the frames they animate.
+//! and popping/exploding add 10/300 on top (M4 onward). `keys()` skips any value
+//! of 10 or more, which is what keeps animating cells out of the matching and
+//! rooting passes during the frames they animate.
 
 use std::collections::{BTreeMap, BTreeSet};
 
