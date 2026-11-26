@@ -136,7 +136,15 @@ impl Board {
     /// cart `update_pool()`'s result: the distinct colour of every settled cell,
     /// excluding the anchor's colour, in cell order.
     pub fn pool(&self) -> Vec<u16> {
-        Vec::new() // stub, implemented in m2.7
+        let mut pool = Vec::new();
+        for k in self.keys() {
+            let value = self.0[&k];
+            let colour = value % 10;
+            if !pool.contains(&colour) && value != ANCHOR {
+                pool.push(colour);
+            }
+        }
+        pool
     }
 }
 
