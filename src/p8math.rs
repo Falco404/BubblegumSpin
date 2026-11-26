@@ -12,7 +12,7 @@
 //! Getting this wrong yields `nil` cells from sector lookups and a mirrored
 //! aim; see `docs/decisions.md`.
 
-use crate::fixed::{from_f64, to_f64, Fix};
+use crate::fixed::{from_f64, int, mul, to_f64, Fix};
 
 /// PICO-8 `sin`: 0..1 turns, y inverted to suit screenspace, so `sin(0.25) == -1`.
 #[inline]
@@ -66,6 +66,53 @@ pub fn mid(lo: Fix, v: Fix, hi: Fix) -> Fix {
 #[inline]
 pub fn band(a: i32, b: i32) -> i32 {
     a & b
+}
+
+/// A seeded xorshift32 generator.
+///
+/// **Not** PICO-8's PRNG: PICO-8's generator is undocumented and the cart's
+/// `rnd()` sequence cannot be reproduced. This one is written down, seeded per
+/// test, and therefore deterministic — see `docs/decisions.md`. The visible
+/// consequence is that gumball colours do not come out in the cart's order.
+#[derive(Debug, Clone)]
+pub struct Rng {
+    state: u32,
+}
+
+impl Rng {
+    /// A generator with a fixed seed. Seed 0 would lock xorshift32 at zero, so
+    /// it is replaced by a constant.
+    pub fn new(seed: u32) -> Self {
+        Self {
+            state: if seed == 0 { 0x9E37_79B9 } else { seed },
+        }
+    }
+
+    /// The next raw 32-bit value (xorshift32).
+    pub fn next_u32(&mut self) -> u32 {
+        let mut x = self.state;
+        x ^= x << 13;
+        x ^= x >> 17;
+        x ^= x << 5;
+        self.state = x;
+        x
+    }
+
+    /// PICO-8 `rnd()`: a fixed-point value in `[0, 1)`.
+    pub fn rnd(&mut self) -> Fix {
+        (self.next_u32() >> 16) as Fix
+    }
+
+    /// PICO-8 `rnd(n)`: a fixed-point value in `[0, n)`.
+    pub fn rnd_fix(&mut self, n: Fix) -> Fix {
+        mul(self.rnd(), n)
+    }
+
+    /// `flr(rnd(col_cnt) + 1)`: the cart's way of picking a gumball colour,
+    /// so the result is `1..=col_cnt`.
+    pub fn colour(&mut self, col_cnt: i32) -> u8 {
+        (crate::fixed::to_int(mul(self.rnd(), int(col_cnt))) + 1) as u8
+    }
 }
 
 #[cfg(test)]
@@ -139,5 +186,62 @@ mod tests {
     fn abs_is_signed_magnitude() {
         assert_eq!(abs(from_f64(-0.5)), from_f64(0.5));
         assert_eq!(abs(int(-3)), int(3));
+    }
+
+    #[test]
+    fn rng_with_the_same_seed_gives_the_same_sequence() {
+        let mut a = Rng::new(7);
+        let mut b = Rng::new(7);
+        for _ in 0..16 {
+            assert_eq!(a.next_u32(), b.next_u32());
+        }
+    }
+
+    #[test]
+    fn rng_matches_the_xorshift32_reference_values() {
+        // Computed independently: x ^= x<<13; x ^= x>>17; x ^= x<<5 (u32 wrap).
+        let mut r = Rng::new(1);
+        let got: Vec<u32> = (0..3).map(|_| r.next_u32()).collect();
+        assert_eq!(got, vec![270_369, 67_634_689, 2_647_435_461]);
+    }
+
+    #[test]
+    fn rng_seed_zero_still_produces_a_sequence() {
+        // xorshift32 is stuck at 0, so the seed is forced off zero.
+        let mut r = Rng::new(0);
+        let first = r.next_u32();
+        assert_ne!(first, 0);
+        assert_ne!(first, r.next_u32());
+    }
+
+    #[test]
+    fn rnd_is_in_the_half_open_unit_interval() {
+        let mut r = Rng::new(3);
+        for _ in 0..1000 {
+            let v = r.rnd();
+            assert!((0..ONE).contains(&v), "rnd() out of range: {v}");
+        }
+    }
+
+    #[test]
+    fn colour_is_one_based_and_within_range() {
+        let mut r = Rng::new(5);
+        for _ in 0..1000 {
+            let c = r.colour(2);
+            assert!((1..=2).contains(&c), "colour out of range: {c}");
+        }
+    }
+
+    #[test]
+    fn colour_uses_every_value_of_the_range() {
+        let mut r = Rng::new(11);
+        let mut seen = [0usize; 7];
+        for _ in 0..600 {
+            seen[r.colour(6) as usize] += 1;
+        }
+        assert_eq!(seen[0], 0, "colour 0 is not a real colour");
+        for c in 1..=6 {
+            assert!(seen[c] > 50, "colour {c} came up {n} times", n = seen[c]);
+        }
     }
 }
