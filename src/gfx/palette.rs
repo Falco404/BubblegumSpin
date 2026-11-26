@@ -101,9 +101,9 @@ mod tests {
 
     #[test]
     fn every_colour_is_distinct() {
-        for a in 0..16 {
-            for b in (a + 1)..16 {
-                assert_ne!(PALETTE[a], PALETTE[b], "colours {a} and {b} collide");
+        for (i, a) in PALETTE.iter().enumerate() {
+            for (j, b) in PALETTE.iter().enumerate().skip(i + 1) {
+                assert_ne!(a, b, "colours {i} and {j} collide");
             }
         }
     }

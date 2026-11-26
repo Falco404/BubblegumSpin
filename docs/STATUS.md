@@ -2,23 +2,22 @@
 <!-- Keep under 40 lines. Rewrite, don't append. -->
 
 ## Now
-Approach settled: full Rust rewrite with `macroquad` (see docs/decisions.md).
-Milestones M1–M8 are filed as issues #11–#18; **no code written yet**. The plan
-lives in `.hermes/plans/2026-11-25_201633-…md`; each issue carries its own task list.
+**M1 done, in review** (PR on `hermes/port-m1`, issue #11). The crate builds,
+`cargo test` is 36 green tests, `cargo run --bin shot` writes a 128x128 PNG with
+no display. No game rules yet — those start in M2.
 
 ## Last merged
-- #9/#10 — repo tidy-up: cart moved to `assets/upstream/` (gitignored),
-  `AGENTS.md` updated.
+- #19 — decisions + status recorded, milestones filed as issues #11–#18.
+- #9/#10 — cart moved to `assets/upstream/` (gitignored), `AGENTS.md` updated.
 
 ## In progress
-- `hermes/docs-plan` — decisions + status recorded, milestone issues opened.
-  No game code in this PR, on purpose.
+- `hermes/port-m1`: fixed point, y-inverted trig, palette, framebuffer, window
+  shell, `bin/shot`. CI YAML is proposed in the PR description only.
 
 ## Next steps (max 3)
-1. Human approves the milestone issues.
-2. M1 (`hermes/port-m1`): crate, `fixed.rs`, `p8math.rs` (y-inverted trig),
-   `gfx/fb.rs`, `bin/shot.rs`, plus the CI YAML proposed in the PR description.
-3. M2: grid, level, board, matching/rooting (no screen).
+1. Merge M1 after review; add the CI workflow (human).
+2. M2 (issue #12): grid, level, board, matching/rooting — no screen.
+3. M3 (issue #13): spin, aim, first on-screen board.
 
 ## Gotchas (max 8, one line each; delete when fixed)
 - PICO-8 `sin`/`atan2` are y-inverted: `sin(0.25) = -1`, `atan2(0,-1) = 0.25`.
@@ -26,7 +25,9 @@ lives in `.hermes/plans/2026-11-25_201633-…md`; each issue carries its own tas
 - `assets/upstream/*` is gitignored on purpose (No License) — `git status` must
   stay clean there.
 - Cart literals like `0x.02` are 2/256, not 0.02; don't "clean up" constants.
+- `cargo run` needs a display; the container has none, so visual proof comes from
+  `cargo run --bin shot` + the PNG.
 - `keys(board)` skips cell 262 (the white anchor); rooting depends on it.
 
 ## Open questions for the human
-- None. (Toolchain: Rust 1.100.0 is in the image; we install nothing.)
+- Does `cargo run` open the 512x512 palette card on Windows? (Cannot test here.)
