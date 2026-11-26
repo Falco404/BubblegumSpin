@@ -103,8 +103,34 @@ impl Board {
     }
 
     /// cart `get_unrooted()`: settled cells not reachable from the anchor.
+    ///
+    /// The flood starts at the anchor's six neighbours, not at the anchor itself
+    /// (the cart does the same), and stops at empty cells and at anything
+    /// animating (`value > 10`).
     pub fn get_unrooted(&self) -> Vec<u16> {
-        Vec::new() // stub, implemented in m2.6
+        let mut unrooted: BTreeSet<u16> = self.keys().into_iter().collect();
+        let mut visited = BTreeSet::new();
+        for rn in neighbors(CENTER).into_iter().flatten() {
+            self.ur_rec(rn, &mut unrooted, &mut visited);
+        }
+        unrooted.into_iter().collect()
+    }
+
+    /// cart `get_ur_rec(i, u, v)`.
+    fn ur_rec(&self, i: u16, u: &mut BTreeSet<u16>, v: &mut BTreeSet<u16>) {
+        if !v.insert(i) {
+            return;
+        }
+        let Some(value) = self.get(i) else {
+            return;
+        };
+        if value > 10 {
+            return;
+        }
+        u.remove(&i);
+        for n in neighbors(i).into_iter().flatten() {
+            self.ur_rec(n, u, v);
+        }
     }
 
     /// cart `update_pool()`'s result: the distinct colour of every settled cell,
