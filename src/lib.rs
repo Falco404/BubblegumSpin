@@ -3,3 +3,5 @@
 //! The crate is split so the rules can be tested without a screen. Game logic
 //! never touches a screen; `main.rs` is the only place that talks to the window
 //! and the audio device.
+
+pub mod fixed;
