@@ -1,0 +1,14 @@
+[package]
+name = "bubblegum-spin"
+version = "0.1.0"
+edition = "2021"
+description = "Native port of Bubblegum Spin by Bee_Randon (PICO-8)"
+license = "proprietary"
+
+[dependencies]
+macroquad = "0.4"
+png = "0.17"
+
+[profile.release]
+lto = true
+codegen-units = 1
