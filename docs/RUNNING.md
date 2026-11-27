@@ -22,6 +22,7 @@ Everything is plain `cargo`; there are no scripts and no environment variables.
 | ... rotated a quarter turn | `cargo run --bin shot -- --scene game --spin 0.25 --out out/spin.png` | one frame |
 | ... aimer turned | `cargo run --bin shot -- --scene game --aim 0.30 --out out/aim.png` | one frame |
 | ... a bubble in flight | `cargo run --bin shot -- --scene game --frames 8 --fire 1 --out out/fired.png` | one frame, `--fire` is a 0-based frame index |
+| ... the game-over cascade | `cargo run --bin shot -- --scene over --frames 14 --out out/over.png` | one frame, one gumball planted past the wall |
 | Level as ASCII | `cargo run --bin board_dump` | 25 rows of `.` `W` `8` `9` |
 | Tests | `cargo test` | `test result: ok. ...` |
 | Lints / format | `cargo clippy --all-targets`, `cargo fmt --check` | no output = clean |
@@ -62,6 +63,12 @@ cargo run
 
 The debug spin key from M3 (`S` / space) is gone: the mass now spins because you
 hit it.
+
+## Save file
+
+`save.dat` sits next to the executable (`target/debug/` under `cargo run`) and holds
+`hiscore=` and `completed=`. Delete the file to reset the hiscore. A missing or
+corrupt file is treated as an empty save, never an error.
 
 The upstream cart in `assets/upstream/` is gitignored and is not needed to build
 or test anything in M1.

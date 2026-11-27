@@ -86,6 +86,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             draw_game(&mut fb, &game);
         }
+        "over" => {
+            // The game-over cascade: one gumball past the right wall ends it, and
+            // the whole mass falls off the screen (M5).
+            let mut game = Game::new(args.seed);
+            game.board.0.insert(270, 3);
+            for _ in 0..args.frames {
+                game.step(&Input::default());
+            }
+            draw_game(&mut fb, &game);
+        }
         other => return Err(format!("unknown scene: {other}").into()),
     }
 

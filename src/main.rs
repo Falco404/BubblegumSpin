@@ -5,6 +5,7 @@
 //! a texture scaled by an integer factor so the 128x128 picture stays crisp.
 
 use bubblegum_spin::gfx::{fb::Fb, scenes::draw_game};
+use bubblegum_spin::save::Save;
 use bubblegum_spin::sim::{Game, Input};
 use macroquad::prelude::*;
 
@@ -36,7 +37,16 @@ fn read_input() -> Input {
 
 #[macroquad::main(window_conf)]
 async fn main() {
-    let mut game = Game::new(1);
+    // cart `_init()`: the hiscore lives beside the executable.
+    let save_path = Save::default_path();
+    let save = save_path.as_deref().map(Save::load).unwrap_or_default();
+    // PICO-8 seeds its own generator; the port takes a fresh seed per run so the
+    // board is not identical every game. `Rng::new` maps 0 to a constant.
+    let seed = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos() ^ d.as_secs() as u32)
+        .unwrap_or(1);
+    let mut game = Game::new_with_save(seed, save, save_path);
     let mut fb = Fb::new();
     draw_game(&mut fb, &game);
 

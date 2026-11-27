@@ -1,19 +1,23 @@
-//! The pure simulation: board, spin, gun and the fired bubble. No rendering, no
-//! audio.
+//! The pure simulation: board, spin, gun, the fired bubble and the rules. No
+//! rendering, no audio.
 //!
 //! Everything here is numbers and grids; `main.rs` reads input, calls
 //! [`Game::step`] 60 times a second, and `gfx::scenes` draws the result.
 
 pub mod bubble;
 pub mod gun;
+pub mod rules;
 pub mod spin;
 
+use std::path::PathBuf;
+
 use crate::board::Board;
-use crate::fixed::from_f64;
 use crate::p8math::Rng;
+use crate::save::Save;
 use bubble::{Bubble, SHOT_MAX};
 use gun::Gun;
-use spin::Spin;
+use rules::{ScoreText, MIN_COL_CNT, ROUND_CLEAR_FRAMES};
+use spin::{Camera, Fade, Shake, Spin};
 
 /// What the player is holding this frame.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -38,7 +42,7 @@ pub struct Game {
     /// Bubbles that were given up and are falling off the screen (cart `f_bubs`).
     pub f_bubs: Vec<Bubble>,
 
-    /// Whose shot it is. `false` means the mass is shooting back (M5.2).
+    /// Whose shot it is. `false` means the mass is shooting back.
     pub player_turn: bool,
     /// A shot is in the air; nothing else is fired until it resolves.
     pub in_flight: bool,
@@ -52,6 +56,8 @@ pub struct Game {
 
     pub bounces: u32,
     pub now_falling: usize,
+    /// Frames since the game-over drop started (cart `drop_t`).
+    pub drop_t: i32,
 
     /// The colours currently in play (cart `col_pool`), ascending cell order.
     pub col_pool: Vec<u16>,
@@ -69,24 +75,51 @@ pub struct Game {
     /// Frames left on the "your turn" HUD hint (cart `hud_t`).
     pub hud_t: i32,
 
+    /// The running score, in the cart's units (the score card shows `score*10`).
+    pub score: i32,
+    pub hiscore: u32,
+    pub new_hiscore: bool,
+    /// Floating score numbers (cart `score_txt`).
+    pub score_txt: Vec<ScoreText>,
+    /// Colours in this round, 2..=6 (cart `col_cnt`).
+    pub col_cnt: i32,
+    /// Extra shots earned by reaching the six-colour round (cart `bonus_shots`).
+    pub bonus_shots: i32,
+
+    /// The game is over: the board has fallen, no more shots are fired.
+    pub over: bool,
+    /// The board is cleared and the next round is about to start.
+    pub round_clear: bool,
+    pub round_clear_t: i32,
+    /// Frames since the game started (cart `t`).
+    pub t: i32,
+
+    pub fade: Fade,
+    pub camera: Camera,
+    pub shake: Shake,
+
+    pub save: Save,
+    /// Where `save.dat` lives; `None` in tests and in the headless renderer.
+    pub save_path: Option<PathBuf>,
+
     /// Previous state of the fire button, for the press edge.
     prev_fire: bool,
 }
 
 impl Game {
-    /// cart `new_game()` + `new_round()`: a fresh level, two colours on the
-    /// conveyor, the first bubble dealt, and the round opened with `torque=.05`.
+    /// A game with no save file behind it: tests and the headless renderer.
     pub fn new(seed: u32) -> Self {
-        let mut rng = Rng::new(seed);
-        let mut board = Board::new();
-        board.set_level(&mut rng, 2);
-        let col_pool = board.pool();
+        Self::new_with_save(seed, Save::default(), None)
+    }
 
+    /// cart `new_game()`: a hiscore from the save, two colours, and the first
+    /// round dealt.
+    pub fn new_with_save(seed: u32, save: Save, save_path: Option<PathBuf>) -> Self {
         let mut game = Self {
-            board,
+            board: Board::new(),
             spin: Spin::new(),
             gun: Gun::new(),
-            rng,
+            rng: Rng::new(seed),
             bubs: Vec::new(),
             f_bubs: Vec::new(),
             player_turn: true,
@@ -96,7 +129,8 @@ impl Game {
             popping: false,
             bounces: 0,
             now_falling: 0,
-            col_pool,
+            drop_t: 0,
+            col_pool: Vec::new(),
             nxt_col: 0,
             nxt_nxt_col: 0,
             shot_cnt: SHOT_MAX,
@@ -104,28 +138,74 @@ impl Game {
             last_shot_max: SHOT_MAX,
             board_shots: 0,
             hud_t: 0,
+            score: 0,
+            hiscore: save.hiscore,
+            new_hiscore: false,
+            score_txt: Vec::new(),
+            col_cnt: MIN_COL_CNT,
+            bonus_shots: -1,
+            over: false,
+            round_clear: false,
+            round_clear_t: 0,
+            t: 0,
+            fade: Fade::default(),
+            camera: Camera::default(),
+            shake: Shake::default(),
+            save,
+            save_path,
             prev_fire: false,
         };
-
-        // cart `new_round()`: two colours on the conveyor, then `reset_bubble()`
-        // deals the first and shifts the second down.
-        game.nxt_nxt_col = game.rnd_col();
-        game.nxt_col = game.rnd_col();
-        game.reset_bubble();
-
-        // `new_round()` ends with `torque=.05`: every round opens with the mass
-        // turning slowly, and the 0.96 decay (110 frames) takes it to a stop.
-        game.spin.torque = from_f64(0.05);
+        // cart `new_game()`: `col_cnt = min_col_cnt`, `bonus_shots = -1`, then
+        // `new_round()` does the rest (level, conveyor, first bubble, torque .05).
+        game.new_round();
         game
     }
 
-    /// One frame at 60 Hz, in the cart's `update_game()` order.
+    /// One frame at 60 Hz: the cart's `_update60` around its `update_game()`.
     pub fn step(&mut self, input: &Input) {
+        self.t += 1;
+        self.fade.step();
+
+        if self.over {
+            // cart `update_over`: no shooting, just the cascade.
+            self.drop_bubs();
+            self.update_falling();
+        } else {
+            self.update_game(input);
+        }
+
+        // The cart ages score text in `draw_game`; doing it here keeps the
+        // simulation complete without a screen.
+        self.tick_score_text();
+        self.camera.step();
+    }
+
+    /// cart `update_game()`, in the cart's order.
+    fn update_game(&mut self, input: &Input) {
         self.update_falling();
         self.spin.step();
         self.popping = self.board.advance_animations();
 
+        if self.col_pool.is_empty() && !self.popping && !self.round_clear {
+            self.check_clear();
+        }
+        if self.round_clear && self.t > self.round_clear_t + ROUND_CLEAR_FRAMES {
+            self.new_round();
+        }
+
+        self.update_hud();
+
+        if self.check_over() || self.round_clear {
+            return;
+        }
+
         self.gun.update(input.left, input.right, input.up);
+
+        // The mass's return shot: fired as soon as its turn starts (M5.2).
+        if !self.player_turn && !self.in_flight {
+            self.in_flight = true;
+            self.fire_bubs();
+        }
 
         if self.reloading && !self.popping {
             self.reset_bubble();
@@ -160,6 +240,13 @@ impl Game {
         }
     }
 
+    /// cart `update_hud()`: the hint timer. The card easing and drawing are M6.
+    fn update_hud(&mut self) {
+        if self.hud_t > 0 {
+            self.hud_t -= 1;
+        }
+    }
+
     /// The cart's `#keys(board)`, used as the torque divisor.
     pub fn mass(&self) -> usize {
         self.board.keys().len()
@@ -180,6 +267,8 @@ mod tests {
         assert_eq!(g.mass(), 60);
         assert_eq!(g.spin.var, 0);
         assert_eq!(g.spin.torque, from_f64(0.05));
+        assert_eq!(g.col_cnt, 2);
+        assert_eq!(g.score, 0);
     }
 
     #[test]
@@ -230,5 +319,26 @@ mod tests {
         g.step(&fire);
         assert!(g.in_flight);
         assert!(g.bubs[0].y < from_f64(121.0), "y = {}", g.bubs[0].y);
+    }
+
+    #[test]
+    fn the_hiscore_comes_from_the_save_and_not_from_the_game() {
+        let save = Save {
+            hiscore: 9_000,
+            completed: true,
+        };
+        let g = Game::new_with_save(7, save, None);
+        assert_eq!(g.hiscore, 9_000);
+        assert_eq!(g.score, 0);
+        assert!(!g.new_hiscore);
+    }
+
+    #[test]
+    fn t_counts_the_frames() {
+        let mut g = Game::new(7);
+        for _ in 0..17 {
+            g.step(&Input::default());
+        }
+        assert_eq!(g.t, 17);
     }
 }
