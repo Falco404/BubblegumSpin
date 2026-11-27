@@ -2,7 +2,7 @@
 
 Native port of the PICO-8 game Bubblegum Spin (v1.1, by Bee_Randon). It
 should play like the original on Windows and Linux; Android maybe later.
-The original cart is in assets/upstream (gitignored), and notes are in reference/ (read-only, never edit).
+The original cart is in assets/upstream (gitignored, never commit it), and notes are in reference/ (read-only, never edit).
 
 ## Rules
 - Never push to main. Work on branches `hermes/<topic>` and open a PR.
@@ -21,7 +21,8 @@ The original cart is in assets/upstream (gitignored), and notes are in reference
 
 ## Docs (keep them small)
 - Rewrite and condense, never just append.
-- Limits: AGENTS.md <= 80 lines, docs/STATUS.md <= 40, docs/decisions.md <= 30.
+- Limits: AGENTS.md <= 80 lines, docs/STATUS.md <= 40, docs/decisions.md <= 30,
+  docs/gotchas.md <= 80.
   Over a limit? Condense, and move old material to docs/archive/ (don't delete).
 - Docs say what the code can't: purpose, constraints, why, how to run, gotchas.
 - Record only significant decisions, one or two lines each, with the reason.
@@ -30,6 +31,7 @@ The original cart is in assets/upstream (gitignored), and notes are in reference
 ## Docs map (read only what the task needs)
 - docs/STATUS.md: where we are. Always read.
 - docs/decisions.md: read before changing architecture, libraries or tools.
+- docs/gotchas.md: traps and measured quirks. Read before changing behaviour.
 - reference/NOTES.md: how the original plays. Read before changing behaviour.
 - docs/architecture.md, docs/RUNNING.md: create once there is something to
   describe or run.
@@ -61,5 +63,6 @@ The original cart is in assets/upstream (gitignored), and notes are in reference
   describe or attach them in the PR.
 - The framework must target Windows and Linux now and Android later.
 - CI must produce Windows and Linux builds I can download.
-- Test command: <fill in once the approach is chosen>
+- Test command: `cargo test` (no screen or GPU); headless frames with
+  `cargo run --bin shot -- --scene game --out out/frame.png`.
 - Credit Bee_Randon in the README.
