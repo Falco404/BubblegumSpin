@@ -4,9 +4,11 @@ A native port of **Bubblegum Spin** (PICO-8, v1.1) by **Bee_Randon**. All game
 design and original art, sound and code are his; this is a private,
 non-commercial reimplementation. See `docs/decisions.md`.
 
-Work in progress: the hex board renders, the mass spins, and you can aim and fire
-a bubble that bounces off the walls, sticks to the mass and twists it (M4). Rules,
-score and the mass's return shot are M5. `docs/STATUS.md` says where we are and
+Work in progress: a full game loop. Aim and fire (`←`/`→`/`↑`, `X`), the bubble
+bounces, sticks and twists the mass, matches pop and score, four shots that clear
+nothing let the mass shoot back, clearing the board starts the next round with one
+more colour, and touching the wall ends the game with your hiscore saved (M1–M5).
+The HUD, sprites, sound and menus are M6–M8. `docs/STATUS.md` says where we are and
 `docs/gotchas.md` collects the traps.
 
 ## Build and run

@@ -5,7 +5,7 @@
 //! through `px2rpx`, and maps a flying bubble back through `rpx2px` when it
 //! needs a cell. So the spin changes where a bubble actually sticks.
 
-use crate::fixed::{div, int, mul, Fix};
+use crate::fixed::{div, int, mul, Fix, ONE};
 use crate::p8math::{atan2, cos, sin, sqrt};
 
 /// The screen centre the mass rotates around: `(64, 64)`.
@@ -62,6 +62,125 @@ impl Spin {
     /// after `calc_torque` has replaced `torque`; see M4).
     pub fn add_torque(&mut self, torque: Fix) {
         self.torque = self.torque.wrapping_add(torque);
+    }
+}
+
+/// cart `update_fade(fadein)`: the screen fade, `±0.02` a frame.
+///
+/// The cart calls `update_fade(fadein)` every frame with `fadein` set to `nil`,
+/// `true` or `false`; `nil` means "no fade in progress", which is the `Idle`
+/// state here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FadeState {
+    Idle,
+    In,
+    Out,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Fade {
+    pub value: Fix,
+    pub state: FadeState,
+    pub faded: bool,
+}
+
+/// The cart's `0.02` fade step, quantised.
+pub const FADE_STEP: Fix = 1_310;
+
+impl Default for Fade {
+    fn default() -> Self {
+        Self {
+            value: 0,
+            state: FadeState::Idle,
+            faded: false,
+        }
+    }
+}
+
+impl Fade {
+    /// cart `init_fadeout()`.
+    pub fn start_out(&mut self) {
+        self.value = 0;
+        self.state = FadeState::Out;
+        self.faded = false;
+    }
+
+    /// cart `init_fadein()`.
+    pub fn start_in(&mut self) {
+        self.value = ONE;
+        self.state = FadeState::In;
+        self.faded = false;
+    }
+
+    pub fn step(&mut self) {
+        match self.state {
+            FadeState::Idle => {}
+            FadeState::In => {
+                if self.value > 0 {
+                    self.value -= FADE_STEP;
+                } else {
+                    self.faded = true;
+                }
+            }
+            FadeState::Out => {
+                if self.value < ONE {
+                    self.value += FADE_STEP;
+                } else {
+                    self.faded = true;
+                }
+            }
+        }
+    }
+}
+
+/// cart `update_camera()`: the bounce shake, `±0.25` a frame back to zero.
+///
+/// The cart checks `< 0` and then `> 0` in the same frame, so a value that is not
+/// a multiple of 0.25 oscillates around zero instead of settling. Every value the
+/// game produces is `±2` (set by a wall bounce), and 2 / 0.25 is exact, so this is
+/// invisible in play and reproduced as-is.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Camera {
+    pub x: Fix,
+    pub y: Fix,
+}
+
+/// One frame of camera shake recovery, `0.25`.
+pub const CAM_STEP: Fix = 16_384;
+
+impl Camera {
+    pub fn step(&mut self) {
+        if self.x < 0 {
+            self.x += CAM_STEP;
+        }
+        if self.x > 0 {
+            self.x -= CAM_STEP;
+        }
+        if self.y < 0 {
+            self.y += CAM_STEP;
+        }
+        if self.y > 0 {
+            self.y -= CAM_STEP;
+        }
+    }
+}
+
+/// cart `shake_cam()`'s decrement: the game-over rumble.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Shake {
+    pub amount: Fix,
+}
+
+/// cart's `shake-=.2`, quantised.
+pub const SHAKE_STEP: Fix = 13_107;
+
+impl Shake {
+    pub fn step(&mut self) {
+        if self.amount > 0 {
+            self.amount -= SHAKE_STEP;
+        } else {
+            self.amount = 0;
+        }
     }
 }
 
@@ -241,5 +360,72 @@ mod tests {
         spin.torque = Fix::MAX;
         spin.step(); // must not panic in debug builds
         assert!(spin.torque != Fix::MAX);
+    }
+
+    #[test]
+    fn a_fade_out_climbs_two_hundredths_a_frame_and_stops() {
+        let mut fade = Fade::default();
+        fade.start_out();
+        for _ in 0..50 {
+            fade.step();
+        }
+        // 50 * 1310 = 65_500, still short of 1.0 (65_536): the cart overshoots on
+        // the next step and only then calls itself faded.
+        assert_eq!(fade.value, 65_500);
+        assert!(!fade.faded);
+        fade.step();
+        assert_eq!(fade.value, 66_810);
+        assert!(!fade.faded);
+        fade.step();
+        assert!(fade.faded);
+    }
+
+    #[test]
+    fn a_fade_in_comes_back_down_to_zero() {
+        let mut fade = Fade::default();
+        fade.start_in();
+        assert_eq!(fade.value, ONE);
+        for _ in 0..51 {
+            fade.step();
+        }
+        assert_eq!(fade.value, -1_274, "the cart lets it go just below zero");
+        assert!(!fade.faded);
+        fade.step();
+        assert!(fade.faded);
+    }
+
+    #[test]
+    fn an_idle_fade_does_nothing() {
+        let mut fade = Fade::default();
+        for _ in 0..100 {
+            fade.step();
+        }
+        assert_eq!((fade.value, fade.faded), (0, false));
+    }
+
+    #[test]
+    fn a_bounce_shake_settles_in_eight_frames() {
+        let mut cam = Camera {
+            x: from_f64(2.0),
+            y: from_f64(-2.0),
+        };
+        for _ in 0..8 {
+            cam.step();
+        }
+        assert_eq!((cam.x, cam.y), (0, 0));
+    }
+
+    #[test]
+    fn the_game_over_rumble_counts_down_to_zero() {
+        let mut shake = Shake {
+            amount: from_f64(2.0),
+        };
+        for _ in 0..10 {
+            shake.step();
+        }
+        assert_eq!(shake.amount, 2, "0.2 does not divide 2 exactly");
+        shake.step();
+        shake.step();
+        assert_eq!(shake.amount, 0);
     }
 }

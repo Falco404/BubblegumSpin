@@ -121,6 +121,25 @@ impl Game {
         }
     }
 
+    /// cart `fire_bubs()`: the mass's return shot.
+    ///
+    /// A bubble appears 96 px from the centre at a random angle and flies in at
+    /// 3 px a frame along the same angle plus half a turn, i.e. straight through
+    /// the centre, so it always meets the board.
+    pub fn fire_bubs(&mut self) {
+        let ang = self.rng.rnd();
+        let bubble = Bubble {
+            x: mul(sin(ang), int(96)) + int(64),
+            y: mul(cos(ang), int(96)) + int(64),
+            dx: mul(sin(ang + HALF), int(3)),
+            dy: mul(cos(ang + HALF), int(3)),
+            col: self.rnd_col(),
+            fired: true,
+            falling: false,
+        };
+        self.bubs.push(bubble);
+    }
+
     /// cart `rnd_col()`: `flr(rnd(col_pool))`, i.e. a random member of the pool.
     ///
     /// PICO-8's `rnd(table)` picks a member; the `flr` is a no-op on colours.
@@ -171,22 +190,32 @@ impl Game {
     /// cart `place_bubble(i, col)`: put the colour into the cell, then run the
     /// matching pass.
     ///
-    /// A run of three or more gets `+300` (the cart's "explode" step; the pop
-    /// animation then adds 10 a frame until `> 600` deletes it). Anything left
-    /// hanging gets `+10`. No run means the placement costs a try. Scoring and
-    /// sound are M5/M7.
+    /// A run of three or more scores `combo * pool` per gumball and gets `+300`
+    /// (the cart's "explode" step; the pop animation then adds 10 a frame until
+    /// `> 600` deletes it). Anything left hanging scores and gets `+10`. No run
+    /// means the placement costs a try. Sound is M7.
     pub fn place_bubble(&mut self, i: u16, col: u16) {
         self.board.0.insert(i, col);
 
         if self.player_turn {
             let matches = self.board.get_matching(i, col);
             if matches.len() > 2 {
+                let mut combo = 1;
                 for m in matches {
+                    let points = combo * self.col_pool.len() as i32;
+                    self.score += points;
+                    combo += 1;
+                    self.score_text(m, crate::sim::rules::col_convert(col), points, 30);
                     if let Some(v) = self.board.0.get_mut(&m) {
                         *v += 300;
                     }
                 }
                 for u in self.board.get_unrooted() {
+                    let points = combo * self.col_pool.len() as i32;
+                    self.score += points;
+                    combo += 1;
+                    let colour = self.board.get(u).unwrap_or(0) % 10;
+                    self.score_text(u, crate::sim::rules::col_convert(colour), points, 0);
                     if let Some(v) = self.board.0.get_mut(&u) {
                         *v += 10;
                     }
@@ -302,6 +331,9 @@ impl Game {
                 self.bubs.remove(i);
             }
             if self.player_turn {
+                if self.check_over() {
+                    return true;
+                }
                 self.reloading = true;
             } else if self.board_shots > 0 {
                 self.in_flight = false;

@@ -8,8 +8,13 @@
 use bubblegum_spin::sim::{Game, Input};
 
 /// The hash of the session below, recorded from the first green run of the code
-/// that the unit tests in `src/sim/bubble.rs` verify.
-const GOLDEN: u64 = 8_430_229_834_542_539_825;
+/// that the unit tests in `src/sim/` verify. It moved once on purpose in M5:
+/// `hud_t` had never been decremented, and scoring is now part of the state.
+const GOLDEN: u64 = 1_727_884_017_847_571_997;
+/// The four-wall-shot session.
+const GOLDEN_PUNISHMENT: u64 = 12_920_328_043_318_786_186;
+/// The game-over cascade.
+const GOLDEN_GAME_OVER: u64 = 13_802_502_266_527_163_046;
 
 /// A fixed input timeline. Six shots: left, right, upright, straight up again,
 /// left again, and one with a held fire button (which must not fire twice).
@@ -83,6 +88,10 @@ fn state_hash(g: &Game) -> u64 {
         g.spin.var as i64,
         g.spin.torque as i64,
         g.gun.a as i64,
+        g.score as i64,
+        g.col_cnt as i64,
+        g.over as i64,
+        g.round_clear as i64,
         g.shot_cnt as i64,
         g.shot_count as i64,
         g.board_shots as i64,
@@ -112,6 +121,31 @@ fn play_900_frames(seed: u32) -> Game {
     g
 }
 
+/// A second timeline: hold left, then fire four times. Each shot goes into the
+/// left wall, bounces out five times and is given up, so the player's four tries
+/// are spent and the mass takes its turn.
+fn punishment_input(frame: u32) -> Input {
+    match frame {
+        0..=399 => Input {
+            left: true,
+            ..Default::default()
+        },
+        400 | 660 | 920 | 1_180 => Input {
+            fire: true,
+            ..Default::default()
+        },
+        _ => Input::default(),
+    }
+}
+
+fn play(frames: u32, input: impl Fn(u32) -> Input, seed: u32) -> Game {
+    let mut g = Game::new(seed);
+    for frame in 0..frames {
+        g.step(&input(frame));
+    }
+    g
+}
+
 #[test]
 fn the_scripted_session_reproduces() {
     let g = play_900_frames(7);
@@ -134,4 +168,36 @@ fn the_scripted_session_actually_plays() {
     assert!(end.bubs.iter().all(|b| !b.fired), "no shot is in the air");
     assert!(!end.popping, "the last pop has finished");
     assert!(end.board.0.values().all(|&v| v < 10));
+}
+
+#[test]
+fn the_punishment_cycle_reproduces() {
+    let g = play(1_600, punishment_input, 7);
+    assert_eq!(
+        state_hash(&g),
+        GOLDEN_PUNISHMENT,
+        "the punishment hash moved"
+    );
+}
+
+#[test]
+fn the_punishment_cycle_really_punishes() {
+    let g = play(1_600, punishment_input, 7);
+    assert_eq!(g.shot_count, 2, "the mass took its turn");
+    assert!(g.player_turn, "and gave the turn back");
+    assert!(!g.over);
+}
+
+#[test]
+fn the_game_over_cascade_reproduces() {
+    let mut g = Game::new(7);
+    // A settled gumball past the right wall: the cart ends the game.
+    g.board.0.insert(270, 3);
+    for _ in 0..240 {
+        g.step(&Input::default());
+    }
+    assert!(g.over);
+    assert!(g.f_bubs.is_empty(), "the whole board fell off the screen");
+    assert_eq!(g.now_falling, 0);
+    assert_eq!(state_hash(&g), GOLDEN_GAME_OVER, "the cascade hash moved");
 }
