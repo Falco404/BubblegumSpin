@@ -2,32 +2,34 @@
 <!-- Keep under 40 lines. Rewrite, don't append. -->
 
 ## Now
-**M1–M4 merged; M5 in review** (PR #13, branch `hermes/port-m5`). 158 tests green,
-`clippy -D warnings` and `fmt --check` clean. `main` = `3dd13d3`; the branch adds
-the rules loop.
+**M1–M5 merged; M6 in review** (PR #14, branch `hermes/port-m6`). 192 tests green,
+`clippy -D warnings` and `fmt --check` clean. `main` = `89ee622`; the branch adds
+the art layer.
 
 ## Where we are
 - Milestones are issues #1–#8; issues and PRs share one number sequence.
-- M1 (#1): 16.16 fixed point, y-inverted trig, palette, framebuffer, `--bin shot`.
-- M2 (#2): hex grid, generated level table, board + matching/rooting/pool.
-- M3 (#3): `px2rpx`, torque + 0.96 decay, `calc_torque`, gun/aimer, `draw_game`.
-- M4 (#4): fire, bounce, collide, stick, spin; pop animation; replay hash.
-- M5 (#5): score + floating score text, tries and the mass's return shot, round
-  clear / new round with one more colour, game-over cascade, fade/camera/shake
-  arithmetic, `save.dat` hiscore; two more replay hashes (punishment, game over).
+- M1: fixed point, y-inverted trig, palette, framebuffer, `--bin shot`.
+- M2: hex grid, generated level, board, matching/rooting/pool.
+- M3: rotation, torque, gun/aimer, `draw_game`.
+- M4: fire, bounce, collide, stick, spin; replay hash.
+- M5: score, tries and return shots, rounds, game over, `save.dat`; three hashes.
+- M6 (#6): the cart's sprite sheet and map (`tools/p8_import.py` → `assets/*.bin`),
+  `spr`/`sspr`/`line`, `bubcol`/`palswap`, Tom Thumb text (`cprint`/`coprint`), the
+  HUD cards and pips, the round-clear banner, `fade_scr`, and five byte-compared
+  golden frames in `tests/golden/`.
 
 ## Next step
-**M6 (issue #6): art** — sprites, palette swaps, font, HUD, banners, fades. The HUD
-is what makes M5's score, tries and hiscore visible; `score_txt` is already queued
-for it, and `fade`/`camera` are computed but not yet drawn.
+**M7 (issue #7): audio** — the 4-channel PICO-8 synth, sfx/music data and the exact
+calls. M8 then owns the menus/tutorial screens and packaging.
 
 ## Gotchas
-`docs/gotchas.md` (78/80). Two that must never slip: never commit
+`docs/gotchas.md` (80/80). Two that must never slip: never commit
 `assets/upstream/`, and PICO-8 trig is y-inverted.
 
 ## Open questions for the human
-1. **The HUD is M6.** The loop works (the mass shoots back, rounds advance, the board
-   explodes at game over) but score, tries and hiscore are only in `save.dat` until
-   the HUD lands.
-2. **Windows**: you confirmed M4; M5's save file has not been run there.
-3. `docs/archive/` still does not exist; nothing needs it yet.
+1. **The menu screens** (`draw_main`, `draw_how`, `draw_final`, `draw_coin`, and the
+   gumball-machine animation) are listed under M6 but need scene state that M8 owns.
+   I left them for M8 — say if you want them pulled forward.
+2. **Font**: Tom Thumb, not PICO-8's (it is not in the cart). Swapping in a real
+   PICO-8 dump later is one table.
+3. **Windows**: M4 was confirmed by you; M5/M6 have not been run there.

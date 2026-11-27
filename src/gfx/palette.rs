@@ -41,11 +41,16 @@ impl Default for Pal {
 }
 
 impl Pal {
-    /// The identity mapping with nothing transparent.
+    /// The identity mapping, with colour 0 transparent.
+    ///
+    /// PICO-8 starts with `palt(0)` **on**: a sprite's colour-0 pixels do not
+    /// draw. `clear`/`rectfill`/`pset` ignore transparency, as in PICO-8.
     pub fn new() -> Self {
+        let mut transparent = [false; 16];
+        transparent[0] = true;
         Self {
             map: std::array::from_fn(|i| i as u8),
-            transparent: [false; 16],
+            transparent,
         }
     }
 
@@ -109,12 +114,16 @@ mod tests {
     }
 
     #[test]
-    fn pal_starts_as_identity_and_nothing_is_transparent() {
+    fn pal_starts_as_identity_with_colour_zero_transparent() {
         let p = Pal::new();
         assert_eq!(p.map, std::array::from_fn::<u8, 16, _>(|i| i as u8));
         for c in 0..16u8 {
+            // `rgb` is the draw-time mapping helper; the screen stores shown colours.
             assert_eq!(p.rgb(c), PALETTE[c as usize]);
-            assert!(!p.transparent(c));
+        }
+        assert!(p.transparent(0), "PICO-8 starts with palt(0) on");
+        for c in 1..16u8 {
+            assert!(!p.transparent(c), "colour {c} must be opaque");
         }
     }
 

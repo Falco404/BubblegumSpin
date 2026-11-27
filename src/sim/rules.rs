@@ -48,6 +48,25 @@ pub fn out_of_arena(x: Fix, y: Fix) -> bool {
         || y + int(B_R - 1) > int(ARENA_BOTTOM)
 }
 
+/// cart `ease_in_out(v, tv, dv)`: move `v` towards `tv`, with a fast approach
+/// close to the target and a slow one far away. Returns the new value and rate.
+pub fn ease_in_out(v: Fix, target: Fix, dv: Fix) -> (Fix, Fix) {
+    let easein = int(4);
+    let easeout = int(200);
+    let mut dv = dv;
+    if (target - v).abs() < int(4) {
+        dv = div(target - v, easein);
+    } else {
+        dv += div(target - v, easeout);
+    }
+    let v = v + dv;
+    if (target - v).abs() < from_f64(0.5) {
+        (target, dv)
+    } else {
+        (v, dv)
+    }
+}
+
 impl Game {
     /// cart `score_text`: queue one floating number.
     pub(crate) fn score_text(&mut self, cell: u16, colour: u8, points: i32, age: i32) {
@@ -481,5 +500,27 @@ mod tests {
             }
         }
         assert_eq!(g.t, 6_000);
+    }
+
+    #[test]
+    fn the_easing_slides_a_card_into_place_and_stops_exactly() {
+        // The HUD card starts off-screen at -28 and is pulled to 12.
+        let (mut y, mut dy) = (int(-28), 0);
+        let mut frames = 0;
+        while y != int(12) && frames < 400 {
+            let (ny, ndy) = ease_in_out(y, int(12), dy);
+            y = ny;
+            dy = ndy;
+            frames += 1;
+        }
+        assert_eq!(y, int(12), "landed on the target");
+        assert!(frames < 200, "took {frames} frames");
+        assert!(frames > 5, "it eases instead of snapping");
+    }
+
+    #[test]
+    fn the_easing_does_nothing_when_already_there() {
+        let (y, dy) = ease_in_out(int(12), int(12), 0);
+        assert_eq!((y, dy), (int(12), 0));
     }
 }

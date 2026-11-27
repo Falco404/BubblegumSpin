@@ -3,7 +3,8 @@
 //! It is plain data with no GPU and no window, so a whole scene can be rendered
 //! and compared (or written to PNG) inside a unit test.
 
-use crate::gfx::palette::Pal;
+use crate::gfx::palette::{Pal, PALETTE};
+use crate::gfx::sprites::Sheet;
 
 /// PICO-8's screen, 128x128 pixels of palette indices.
 pub const WIDTH: i32 = 128;
@@ -32,8 +33,19 @@ impl Fb {
     }
 
     /// PICO-8 `cls(c)`.
+    ///
+    /// `cls` ignores `palt` (the screen is filled even with colour 0), but it does
+    /// honour `pal`.
     pub fn clear(&mut self, c: u8) {
-        self.px.fill(c & 15);
+        let c = self.shown(c);
+        self.px.fill(c);
+    }
+
+    /// The colour actually written for draw colour `c`: PICO-8 applies `pal()` at
+    /// draw time, not when the screen is converted.
+    #[inline]
+    pub fn shown(&self, c: u8) -> u8 {
+        self.pal.map[(c & 15) as usize]
     }
 
     /// PICO-8 `pset(x, y, c)`. Out-of-bounds writes are silently dropped,
@@ -42,7 +54,8 @@ impl Fb {
         if x < 0 || y < 0 || x >= WIDTH || y >= HEIGHT {
             return;
         }
-        self.px[(y * WIDTH + x) as usize] = c & 15;
+        let c = self.shown(c);
+        self.px[(y * WIDTH + x) as usize] = c;
     }
 
     /// PICO-8 `pget(x, y)`; 0 outside the screen.
@@ -63,10 +76,92 @@ impl Fb {
         if xa > xb || ya > yb {
             return;
         }
+        let c = self.shown(c);
         for y in ya..=yb {
             let row = (y * WIDTH) as usize;
             for x in xa..=xb {
-                self.px[row + x as usize] = c & 15;
+                self.px[row + x as usize] = c;
+            }
+        }
+    }
+
+    /// PICO-8 `line(x0, y0, x1, y1, c)`: Bresenham, both ends included and clipped.
+    pub fn line(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, c: u8) {
+        let (mut x, mut y) = (x0, y0);
+        let dx = (x1 - x0).abs();
+        let dy = -(y1 - y0).abs();
+        let sx = if x0 < x1 { 1 } else { -1 };
+        let sy = if y0 < y1 { 1 } else { -1 };
+        let mut err = dx + dy;
+        loop {
+            self.pset(x, y, c);
+            if x == x1 && y == y1 {
+                break;
+            }
+            let e2 = 2 * err;
+            if e2 >= dy {
+                err += dy;
+                x += sx;
+            }
+            if e2 <= dx {
+                err += dx;
+                y += sy;
+            }
+        }
+    }
+
+    /// PICO-8 `spr(n, x, y)`: an 8x8 sprite from the sheet.
+    pub fn spr(&mut self, sheet: &Sheet, n: i32, x: i32, y: i32) {
+        self.spr_flip(sheet, n, x, y, false);
+    }
+
+    /// `spr` with PICO-8's horizontal flip.
+    ///
+    /// Colour 0 is skipped while `palt(0)` is on, which is PICO-8's default: a
+    /// sprite's background is transparent unless asked otherwise.
+    pub fn spr_flip(&mut self, sheet: &Sheet, n: i32, x: i32, y: i32, flip_x: bool) {
+        let (sx, sy) = Sheet::sprite_origin(n);
+        for dy in 0..8 {
+            for dx in 0..8 {
+                let src_x = sx + if flip_x { 7 - dx } else { dx };
+                let c = sheet.pixel(src_x, sy + dy);
+                if self.pal.transparent(c) {
+                    continue;
+                }
+                self.pset(x + dx, y + dy, c);
+            }
+        }
+    }
+
+    /// PICO-8 `sspr(sx, sy, sw, sh, dx, dy, dw, dh)`: a scaled sprite blit.
+    ///
+    /// Nearest neighbour, no filtering: each destination pixel samples the source
+    /// pixel its centre falls in, which is what PICO-8's fixed-point scaler does.
+    #[allow(clippy::too_many_arguments)]
+    pub fn sspr(
+        &mut self,
+        sheet: &Sheet,
+        sx: i32,
+        sy: i32,
+        sw: i32,
+        sh: i32,
+        dx: i32,
+        dy: i32,
+        dw: i32,
+        dh: i32,
+    ) {
+        if sw <= 0 || sh <= 0 || dw <= 0 || dh <= 0 {
+            return;
+        }
+        for y in 0..dh {
+            let src_y = sy + (y as i64 * sh as i64 / dh as i64) as i32;
+            for x in 0..dw {
+                let src_x = sx + (x as i64 * sw as i64 / dw as i64) as i32;
+                let c = sheet.pixel(src_x, src_y);
+                if self.pal.transparent(c) {
+                    continue;
+                }
+                self.pset(dx + x, dy + y, c);
             }
         }
     }
@@ -86,7 +181,7 @@ impl Fb {
 
         let mut rgb = Vec::with_capacity(self.px.len() * 3);
         for &c in self.px.iter() {
-            rgb.extend_from_slice(&self.pal.rgb(c));
+            rgb.extend_from_slice(&PALETTE[c as usize]);
         }
         writer.write_image_data(&rgb)?;
         Ok(())
@@ -115,7 +210,7 @@ impl Fb {
     pub fn to_rgba8(&self) -> Vec<u8> {
         let mut rgba = Vec::with_capacity(self.px.len() * 4);
         for &c in self.px.iter() {
-            let [r, g, b] = self.pal.rgb(c);
+            let [r, g, b] = PALETTE[c as usize];
             rgba.extend_from_slice(&[r, g, b, 255]);
         }
         rgba
@@ -276,8 +371,8 @@ mod tests {
     #[test]
     fn to_png_follows_pal_remapping() {
         let mut fb = Fb::new();
-        fb.clear(1);
         fb.pal.pal(1, 7); // draw colour 1 as white
+        fb.clear(1);
         let path = std::env::temp_dir().join("bubblegum-spin-fb-pal-test.png");
         fb.to_png(&path).unwrap();
 
@@ -287,5 +382,106 @@ mod tests {
         reader.next_frame(&mut buf).unwrap();
         assert_eq!(&buf[0..3], &[255, 241, 232]);
         std::fs::remove_file(&path).ok();
+    }
+
+    /// A sheet with a few pixels lit, for the drawing tests.
+    fn sheet_with(pixels: &[(i32, i32, u8)]) -> Vec<u8> {
+        let mut data = vec![0u8; 8192];
+        for &(x, y, c) in pixels {
+            let i = (y * 128 + x) as usize;
+            if i.is_multiple_of(2) {
+                data[i / 2] |= c & 15;
+            } else {
+                data[i / 2] |= (c & 15) << 4;
+            }
+        }
+        data
+    }
+
+    #[test]
+    fn pal_is_applied_when_the_pixel_is_drawn() {
+        // PICO-8 remaps at draw time, so a later pal() reset does not repaint.
+        let mut fb = Fb::new();
+        fb.pal.pal(9, 8);
+        fb.pset(1, 1, 9);
+        fb.pal.pal_all_reset();
+        assert_eq!(fb.pget(1, 1), 8);
+    }
+
+    #[test]
+    fn spr_draws_sprite_n_at_the_corner() {
+        // Sprite 2 starts at (16,0); light its top-left pixel with colour 3.
+        let data = sheet_with(&[(16, 0, 3)]);
+        let sheet = Sheet { data: &data };
+        let mut fb = Fb::new();
+        fb.spr(&sheet, 2, 10, 20);
+        assert_eq!(fb.pget(10, 20), 3);
+        assert_eq!(fb.pget(9, 20), 0, "nothing left of the sprite");
+        assert_eq!(fb.pget(18, 20), 0, "nothing right of an 8 px sprite");
+    }
+
+    #[test]
+    fn spr_skips_colour_zero_while_palt_zero_is_on() {
+        let data = sheet_with(&[(16, 0, 3), (17, 0, 0)]);
+        let sheet = Sheet { data: &data };
+        let mut fb = Fb::new();
+        fb.clear(6);
+        fb.spr(&sheet, 2, 0, 0);
+        assert_eq!(fb.pget(0, 0), 3);
+        assert_eq!(fb.pget(1, 0), 6, "colour 0 is transparent by default");
+
+        fb.pal.palt(0, false);
+        fb.spr(&sheet, 2, 0, 0);
+        assert_eq!(fb.pget(1, 0), 0, "palt(0,false) makes 0 opaque");
+    }
+
+    #[test]
+    fn spr_flip_mirrors_the_sprite() {
+        let data = sheet_with(&[(16, 0, 5)]);
+        let sheet = Sheet { data: &data };
+        let mut fb = Fb::new();
+        fb.spr_flip(&sheet, 2, 0, 0, true);
+        assert_eq!(fb.pget(7, 0), 5);
+        assert_eq!(fb.pget(0, 0), 0);
+    }
+
+    #[test]
+    fn sspr_scales_by_nearest_neighbour() {
+        // One lit pixel at (0,0) scaled to 4x4 fills that quarter of the target.
+        let data = sheet_with(&[(0, 0, 7), (1, 0, 9)]);
+        let sheet = Sheet { data: &data };
+        let mut fb = Fb::new();
+        fb.sspr(&sheet, 0, 0, 2, 1, 10, 20, 4, 2);
+        assert_eq!(fb.pget(10, 20), 7);
+        assert_eq!(fb.pget(11, 21), 7);
+        assert_eq!(fb.pget(12, 20), 9);
+        assert_eq!(fb.pget(13, 21), 9);
+        assert_eq!(fb.pget(14, 20), 0, "outside the 4 px target");
+    }
+
+    #[test]
+    fn sspr_refuses_a_degenerate_size() {
+        let data = sheet_with(&[(0, 0, 7)]);
+        let sheet = Sheet { data: &data };
+        let mut fb = Fb::new();
+        fb.sspr(&sheet, 0, 0, 0, 0, 0, 0, 8, 8); // must not panic
+        assert_eq!(fb.pget(0, 0), 0);
+    }
+
+    #[test]
+    fn line_includes_both_ends() {
+        let mut fb = Fb::new();
+        fb.line(0, 0, 10, 10, 4);
+        assert_eq!(fb.pget(0, 0), 4);
+        assert_eq!(fb.pget(10, 10), 4);
+        assert_eq!(fb.px.iter().filter(|&&p| p == 4).count(), 11);
+    }
+
+    #[test]
+    fn line_clips_instead_of_wrapping() {
+        let mut fb = Fb::new();
+        fb.line(-5, 0, 5, 0, 4); // must not panic or wrap to the row end
+        assert_eq!(fb.pget(0, 0), 4);
+        assert_eq!(fb.pget(127, 0), 0);
     }
 }

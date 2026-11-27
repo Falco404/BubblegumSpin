@@ -9,6 +9,9 @@ license = "proprietary"
 macroquad = "0.4"
 png = "0.17"
 
+[dev-dependencies]
+png = "0.17"
+
 [profile.release]
 lto = true
 codegen-units = 1
