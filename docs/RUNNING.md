@@ -18,9 +18,10 @@ Everything is plain `cargo`; there are no scripts and no environment variables.
 |---|---|---|
 | Window (4x scale, 512x512) | `cargo run` | the board scene |
 | Headless screenshot | `cargo run --bin shot` | `out/m1.png` (128x128 RGB) |
-| Board scene screenshot | `cargo run --bin shot -- --scene game --out out/m3.png` | one frame |
+| Board scene screenshot | `cargo run --bin shot -- --scene game --out out/game.png` | one frame |
 | ... rotated a quarter turn | `cargo run --bin shot -- --scene game --spin 0.25 --out out/spin.png` | one frame |
 | ... aimer turned | `cargo run --bin shot -- --scene game --aim 0.30 --out out/aim.png` | one frame |
+| ... a bubble in flight | `cargo run --bin shot -- --scene game --frames 8 --fire 1 --out out/fired.png` | one frame, `--fire` is a 0-based frame index |
 | Level as ASCII | `cargo run --bin board_dump` | 25 rows of `.` `W` `8` `9` |
 | Tests | `cargo test` | `test result: ok. ...` |
 | Lints / format | `cargo clippy --all-targets`, `cargo fmt --check` | no output = clean |
@@ -50,14 +51,17 @@ cd BubblegumSpin
 cargo run
 ```
 
-## Controls (M3)
+## Controls (M4)
 
 | Key | What it does |
 |---|---|
 | `←` / `A` | aim left |
 | `→` / `D` | aim right |
 | `↑` / `W` | snap the aimer back to vertical |
-| `S` / space | **debug**: spin the mass. Not a cart button; removed when firing lands in M4. |
+| `X` / `K` | fire (the cart's X button). One bubble per press; the press edge is read once per 60 Hz step. |
+
+The debug spin key from M3 (`S` / space) is gone: the mass now spins because you
+hit it.
 
 The upstream cart in `assets/upstream/` is gitignored and is not needed to build
 or test anything in M1.

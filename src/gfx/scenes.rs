@@ -11,8 +11,9 @@ use crate::sim::Game;
 /// The aimer's trail dots, at these pixel distances from the gun.
 const DOTS: [i32; 3] = [5, 10, 15];
 
-/// cart `draw_game()`, reduced to what M3 needs: background, floor, the board's
-/// gumballs as filled circles (the real sprites arrive in M6), and the aimer.
+/// cart `draw_game()`, reduced to what M3/M4 need: background, floor, the
+/// board's gumballs as filled circles (the real sprites arrive in M6), the
+/// bubbles in the air and the aimer.
 pub fn draw_game(fb: &mut Fb, game: &Game) {
     fb.clear(6);
     fb.rectfill(0, 72, 128, 128, 13);
@@ -21,6 +22,11 @@ pub fn draw_game(fb: &mut Fb, game: &Game) {
         let (gx, gy) = b2px(cell);
         let (x, y) = px2rpx(int(gx), int(gy), game.spin.var);
         fb.circfill(to_int(x), to_int(y), B_R, (value % 10) as u8);
+    }
+
+    // The bubble in the gun, the one in flight and any that were given up.
+    for b in game.bubs.iter().chain(game.f_bubs.iter()) {
+        fb.circfill(to_int(b.x), to_int(b.y), B_R, b.col as u8);
     }
 
     draw_aimer(fb, game);
@@ -42,9 +48,6 @@ mod tests {
     use super::*;
     use crate::board::Board;
     use crate::fixed::from_f64;
-    use crate::p8math::Rng;
-    use crate::sim::gun::Gun;
-    use crate::sim::spin::Spin;
     use crate::sim::Game;
 
     fn hand_board(pairs: &[(u16, u16)]) -> Board {
@@ -52,12 +55,9 @@ mod tests {
     }
 
     fn game_with(board: Board) -> Game {
-        Game {
-            board,
-            spin: Spin::new(),
-            gun: Gun::new(),
-            rng: Rng::new(1),
-        }
+        let mut game = Game::new(1);
+        game.board = board;
+        game
     }
 
     #[test]

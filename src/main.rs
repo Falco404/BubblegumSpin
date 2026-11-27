@@ -29,8 +29,8 @@ fn read_input() -> Input {
         left: is_key_down(KeyCode::Left) || is_key_down(KeyCode::A),
         right: is_key_down(KeyCode::Right) || is_key_down(KeyCode::D),
         up: is_key_down(KeyCode::Up) || is_key_down(KeyCode::W),
-        // Debug affordance until firing exists (M4); not a cart button.
-        debug_spin: is_key_down(KeyCode::S) || is_key_down(KeyCode::Space),
+        // The cart's X button; Z is its O button, which M5 will use.
+        fire: is_key_down(KeyCode::X) || is_key_down(KeyCode::K),
     }
 }
 
