@@ -66,3 +66,6 @@ code wins if the two ever disagree.
   Administration permission — ask the human).
 - Issues and pull requests **share one number sequence** here: the milestones are
   issues #1–#8, so pull requests start at #9.
+- `git filter-branch` leaves `refs/original/…` behind and the old blobs stay
+  reachable until that ref is deleted **and** `git gc --prune=now` runs — a
+  "rewritten" file can still be served from a repo that looks clean.
