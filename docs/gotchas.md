@@ -1,9 +1,10 @@
 # Gotchas
 
-Things that will bite you. **One line each; delete the line when it stops being
-true.** Everything here was learned the hard way — usually from a test that failed
-for a reason I had assumed away. `docs/STATUS.md` links here; the code wins if the
-two ever disagree.
+**Limit: 80 lines** — condense, never just append, and move stale material to
+`docs/archive/`. Things that will bite you, **one line each; delete the line when
+it stops being true.** Everything here was learned the hard way — usually from a
+test that failed for a reason I had assumed away. `docs/STATUS.md` links here; the
+code wins if the two ever disagree.
 
 ## The cart and the licence
 
