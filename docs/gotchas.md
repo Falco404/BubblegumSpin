@@ -33,14 +33,22 @@ code wins if the two ever disagree.
 - Torque from `0.05` needs **110** frames to reach exactly 0, not the 60 the plan
   guessed. At 60 frames: `torque = 271`, `var = 74_338`.
 - Aiming is asymmetric by one pixel: 30 frames of left → x = 50, right → x = 77.
-- `S` / space is a **debug** spin key, not a cart button — remove it when M4 adds
-  firing.
+- `S` / space is a **debug** spin key, not a cart button — removed in M4, which
+  replaced it with firing.
+- The cart's `new_round()` sets `torque=.05`: every round opens with the mass
+  turning, and the 0.96 decay takes 110 frames to stop it. Do not zero it.
+- `update_bubble` mutates `dx`/`dy` on a local copy of the bubble; a Rust port must
+  write the whole struct back or a wall bounce flips a value nobody stores (the
+  symptom is five "bounces" in five frames). Pin the frame count, not just the
+  bounce count.
 
 ## Grid and board
 
 - Cell values are `u16`: they hold `colour + 10*pop + 300*explode` and reach ~609;
   the cart deletes a popper only at `v > 600`. Settled means `v < 10`.
 - `keys()` skips `v >= 10` (animating cells) **and** the centre `262` (the anchor).
+- `get_dest_cell` can return `nil` (`neighbors()` has no cell outward of an edge);
+  the cart would do `board[nil]=col` and error. The port gives the shot up instead.
 - `neighbors()` wraps the last column into the next row (`x > 21`) and never bounds
   `y` upward, so indexes above 524 simply read as absent. Both quirks are the cart's.
 - Layout: `b2px(i) = (x*8 + (-16 + 4 if row is odd), y*7 - 20)`, `B_R = 4`,

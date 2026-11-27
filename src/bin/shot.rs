@@ -4,6 +4,7 @@
 //! cargo run --bin shot                                        # card -> out/m1.png
 //! cargo run --bin shot -- --scene game --out out/m3.png
 //! cargo run --bin shot -- --scene game --frames 30 --spin 0.25 --out out/m3-spin.png
+//! cargo run --bin shot -- --scene game --frames 12 --fire 1 --out out/m4-fire.png
 //! ```
 
 use bubblegum_spin::fixed::{from_f64, Fix};
@@ -16,6 +17,8 @@ struct Args {
     out: String,
     spin: Option<Fix>,
     aim: Option<Fix>,
+    /// 0-based frame on which the X button is pressed, then released.
+    fire: Option<u32>,
     seed: u32,
 }
 
@@ -27,6 +30,7 @@ impl Default for Args {
             out: String::new(),
             spin: None,
             aim: None,
+            fire: None,
             seed: 1,
         }
     }
@@ -43,13 +47,14 @@ fn parse_args() -> Result<Args, Box<dyn std::error::Error>> {
             "--out" => args.out = value()?,
             "--spin" => args.spin = Some(from_f64(value()?.parse::<f64>()?)),
             "--aim" => args.aim = Some(from_f64(value()?.parse::<f64>()?)),
+            "--fire" => args.fire = Some(value()?.parse()?),
             "--seed" => args.seed = value()?.parse()?,
             other => return Err(format!("unknown flag: {other}").into()),
         }
     }
     if args.out.is_empty() {
         args.out = match args.scene.as_str() {
-            "game" => "out/m3.png".to_string(),
+            "game" => "out/game.png".to_string(),
             _ => "out/m1.png".to_string(),
         };
     }
@@ -71,9 +76,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 game.gun.a = a;
             }
             // Step the simulation the requested number of frames with a fixed
-            // input script, so a screenshot can show motion (spin, aim).
-            for _ in 0..args.frames {
-                let input = Input::default();
+            // input script, so a screenshot can show motion (spin, aim, a shot).
+            for frame in 0..args.frames {
+                let input = Input {
+                    fire: args.fire == Some(frame),
+                    ..Default::default()
+                };
                 game.step(&input);
             }
             draw_game(&mut fb, &game);

@@ -146,6 +146,30 @@ impl Board {
         }
         pool
     }
+
+    /// cart `update_spinner()`'s second half: advance every animating cell one
+    /// pop step and delete the ones that are finished.
+    ///
+    /// A value is `colour + 10*pop + 300*explode`, so `> 10` means "animating"
+    /// and `> 600` means "done". The cart tests `> 600` against the value from
+    /// *before* this frame's `+10`, which is why a cell disappears on the frame
+    /// that would have taken it to 613. Returns whether anything animated, which
+    /// is the cart's `popping` flag.
+    pub fn advance_animations(&mut self) -> bool {
+        let mut popping = false;
+        let cells: Vec<u16> = self.0.keys().copied().collect();
+        for k in cells {
+            let v = self.0[&k];
+            if v > 10 {
+                popping = true;
+                self.0.insert(k, v + 10);
+            }
+            if v > 600 {
+                self.0.remove(&k);
+            }
+        }
+        popping
+    }
 }
 
 #[cfg(test)]
@@ -315,5 +339,34 @@ mod tests {
         let pool = board.pool();
         assert!(!pool.is_empty() && pool.len() <= 2, "pool: {pool:?}");
         assert!(pool.iter().all(|&c| (1..=2).contains(&c)));
+    }
+
+    #[test]
+    fn an_exploding_cell_pops_ten_a_frame_and_is_deleted_at_six_hundred() {
+        // 303 = colour 3 with the +300 "explode" flag. The cart increments while
+        // v > 10 and deletes while v > 600, testing the *old* value, so the cell
+        // is gone on the 31st frame (the step that would have made it 613).
+        let mut board = board_from(&[(200, 303)]);
+        let mut frames = 0;
+        while board.get(200).is_some() {
+            assert!(board.advance_animations(), "still popping");
+            frames += 1;
+            assert!(frames <= 40, "never deleted");
+        }
+        assert_eq!(frames, 31);
+    }
+
+    #[test]
+    fn a_cell_that_is_already_over_six_hundred_is_deleted_this_frame() {
+        let mut board = board_from(&[(200, 601)]);
+        assert!(board.advance_animations());
+        assert_eq!(board.get(200), None);
+    }
+
+    #[test]
+    fn settled_cells_do_not_animate() {
+        let mut board = board_from(&[(200, 3), (201, 9)]);
+        assert!(!board.advance_animations());
+        assert_eq!((board.get(200), board.get(201)), (Some(3), Some(9)));
     }
 }
