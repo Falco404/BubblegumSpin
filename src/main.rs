@@ -1,42 +1,82 @@
 //! The window: a thin `macroquad` shell around the software framebuffer.
 //!
-//! All drawing happens into `Fb`; this file only uploads it as a texture and
-//! scales it up by an integer factor so the 128x128 picture stays crisp.
+//! All drawing happens into `Fb` inside `gfx::scenes`; this file only reads the
+//! keyboard, advances the simulation at a fixed 60 Hz, and uploads the frame as
+//! a texture scaled by an integer factor so the 128x128 picture stays crisp.
 
-use bubblegum_spin::gfx::{fb::Fb, palette_card};
+use bubblegum_spin::gfx::{fb::Fb, scenes::draw_game};
+use bubblegum_spin::sim::{Game, Input};
 use macroquad::prelude::*;
 
-/// PICO-8 resolution, 128x128, shown at 4x = 512x512 by default.
-const SCALE: f32 = 4.0;
+/// PICO-8's `_update60`: one simulation step per 1/60 s.
+const STEP: f32 = 1.0 / 60.0;
+/// Default window size: 4x the 128x128 screen.
+const DEFAULT_SCALE: f32 = 4.0;
 
 fn window_conf() -> Conf {
     Conf {
         window_title: "Bubblegum Spin".to_owned(),
-        window_width: (128.0 * SCALE) as i32,
-        window_height: (128.0 * SCALE) as i32,
-        window_resizable: false,
+        window_width: (128.0 * DEFAULT_SCALE) as i32,
+        window_height: (128.0 * DEFAULT_SCALE) as i32,
+        window_resizable: true,
         high_dpi: false,
         ..Default::default()
     }
 }
 
+fn read_input() -> Input {
+    Input {
+        left: is_key_down(KeyCode::Left) || is_key_down(KeyCode::A),
+        right: is_key_down(KeyCode::Right) || is_key_down(KeyCode::D),
+        up: is_key_down(KeyCode::Up) || is_key_down(KeyCode::W),
+        // Debug affordance until firing exists (M4); not a cart button.
+        debug_spin: is_key_down(KeyCode::S) || is_key_down(KeyCode::Space),
+    }
+}
+
 #[macroquad::main(window_conf)]
 async fn main() {
+    let mut game = Game::new(1);
     let mut fb = Fb::new();
-    palette_card(&mut fb);
+    draw_game(&mut fb, &game);
 
     let texture = Texture2D::from_rgba8(128, 128, &fb.to_rgba8());
     texture.set_filter(FilterMode::Nearest);
 
+    // macroquad's texture update takes an `Image`; keep one and refill its bytes.
+    let mut image = Image {
+        width: 128,
+        height: 128,
+        bytes: Vec::new(),
+    };
+
+    let mut accumulator = 0.0f32;
     loop {
+        // Fixed step, capped so a stall does not replay hundreds of frames.
+        accumulator += get_frame_time().min(0.25);
+        let input = read_input();
+        while accumulator >= STEP {
+            game.step(&input);
+            accumulator -= STEP;
+        }
+
+        draw_game(&mut fb, &game);
+        image.bytes = fb.to_rgba8();
+        texture.update(&image);
+
         clear_background(BLACK);
+        let scale = (screen_width() / 128.0)
+            .min(screen_height() / 128.0)
+            .floor()
+            .max(1.0);
+        let (w, h) = (128.0 * scale, 128.0 * scale);
         draw_texture_ex(
             &texture,
-            0.0,
-            0.0,
+            ((screen_width() - w) / 2.0).floor(),
+            ((screen_height() - h) / 2.0).floor(),
             WHITE,
             DrawTextureParams {
-                dest_size: Some(vec2(screen_width(), screen_height())),
+                dest_size: Some(vec2(w, h)),
                 ..Default::default()
             },
         );

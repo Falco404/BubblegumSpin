@@ -2,6 +2,7 @@
 
 pub mod fb;
 pub mod palette;
+pub mod scenes;
 
 use fb::Fb;
 

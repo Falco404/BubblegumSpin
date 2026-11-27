@@ -57,9 +57,12 @@ pub fn ceil(a: Fix) -> Fix {
 }
 
 /// PICO-8 `mid(lo, v, hi)`: clamp `v` into `[lo, hi]`.
+///
+/// PICO-8 tolerates `lo > hi` (it returns `lo`, then `hi` also fails); this port
+/// asserts instead, because every call site in the cart passes them sorted.
 #[inline]
 pub fn mid(lo: Fix, v: Fix, hi: Fix) -> Fix {
-    v.max(lo).min(hi)
+    v.clamp(lo.min(hi), hi.max(lo))
 }
 
 /// PICO-8 `band` on plain integers.

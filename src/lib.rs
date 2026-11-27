@@ -10,3 +10,4 @@ pub mod fixed;
 pub mod gfx;
 pub mod grid;
 pub mod p8math;
+pub mod sim;
