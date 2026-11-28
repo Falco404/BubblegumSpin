@@ -60,6 +60,10 @@ jobs:
         run: |
           ndk="${ANDROID_NDK_HOME:-${ANDROID_NDK_LATEST_HOME:-${ANDROID_NDK_ROOT}}}"
           test -n "$ndk" || { echo "no NDK on the runner"; exit 1; }
+          # NDK r27 dropped the per-target ar/ranlib wrappers cargo-quad-apk wants.
+          bin="$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          test -e "$bin/aarch64-linux-android-ar" || ln -s "$bin/llvm-ar" "$bin/aarch64-linux-android-ar"
+          test -e "$bin/aarch64-linux-android-ranlib" || ln -s "$bin/llvm-ranlib" "$bin/aarch64-linux-android-ranlib"
           echo "NDK_HOME=$ndk" >> "$GITHUB_ENV"
       - uses: Swatinem/rust-cache@v2
       - name: Install cargo-quad-apk
