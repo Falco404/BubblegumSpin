@@ -24,6 +24,9 @@ Everything is plain `cargo`; there are no scripts and no environment variables.
 | ... a bubble in flight | `cargo run --bin shot -- --scene game --frames 8 --fire 1 --out out/fired.png` | one frame, `--fire` is a 0-based frame index |
 | ... the game-over cascade | `cargo run --bin shot -- --scene over --frames 14 --out out/over.png` | one frame, one gumball planted past the wall |
 | Level as ASCII | `cargo run --bin board_dump` | 25 rows of `.` `W` `8` `9` |
+| Golden frames | `cargo test --test screens` | byte-compares 5 frames with `tests/golden/` |
+| Re-record goldens | `UPDATE_GOLDENS=1 cargo test --test screens` | rewrites `tests/golden/*.png` after an intended visual change |
+| Re-extract the art | `python3 tools/p8_import.py` | `assets/sprites.bin`, `assets/map.bin` from the cart |
 | Tests | `cargo test` | `test result: ok. ...` |
 | Lints / format | `cargo clippy --all-targets`, `cargo fmt --check` | no output = clean |
 | Release build | `cargo build --release` | `target/release/bubblegum-spin[.exe]` |

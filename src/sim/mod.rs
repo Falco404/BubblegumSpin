@@ -12,6 +12,7 @@ pub mod spin;
 use std::path::PathBuf;
 
 use crate::board::Board;
+use crate::fixed::{int, Fix};
 use crate::p8math::Rng;
 use crate::save::Save;
 use bubble::{Bubble, SHOT_MAX};
@@ -74,6 +75,12 @@ pub struct Game {
     pub board_shots: i32,
     /// Frames left on the "your turn" HUD hint (cart `hud_t`).
     pub hud_t: i32,
+    /// The HUD cards slide in and out; these are their y positions and rates.
+    pub score_card_y: Fix,
+    pub score_card_dy: Fix,
+    pub nxt_card_y: Fix,
+    pub nxt_card_dy: Fix,
+    pub show_hud: bool,
 
     /// The running score, in the cart's units (the score card shows `score*10`).
     pub score: i32,
@@ -138,6 +145,11 @@ impl Game {
             last_shot_max: SHOT_MAX,
             board_shots: 0,
             hud_t: 0,
+            score_card_y: int(-28),
+            score_card_dy: 0,
+            nxt_card_y: int(136),
+            nxt_card_dy: 0,
+            show_hud: false,
             score: 0,
             hiscore: save.hiscore,
             new_hiscore: false,
@@ -240,11 +252,28 @@ impl Game {
         }
     }
 
-    /// cart `update_hud()`: the hint timer. The card easing and drawing are M6.
+    /// cart `update_hud()`: the hint timer and the two sliding cards.
     fn update_hud(&mut self) {
         if self.hud_t > 0 {
+            self.show_hud = true;
             self.hud_t -= 1;
+        } else {
+            self.show_hud = false;
         }
+
+        // The O-button peek is part of the M8 input map; until then the cards
+        // follow the hint timer only.
+        let (target_s, target_n) = if self.show_hud {
+            (int(12), int(108))
+        } else {
+            (int(-28), int(136))
+        };
+        let (y, dy) = rules::ease_in_out(self.score_card_y, target_s, self.score_card_dy);
+        self.score_card_y = y;
+        self.score_card_dy = dy;
+        let (y, dy) = rules::ease_in_out(self.nxt_card_y, target_n, self.nxt_card_dy);
+        self.nxt_card_y = y;
+        self.nxt_card_dy = dy;
     }
 
     /// The cart's `#keys(board)`, used as the torque divisor.

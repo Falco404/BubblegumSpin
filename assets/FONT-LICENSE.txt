@@ -1,0 +1,39 @@
+Tom Thumb 3x5 bitmap font — bundled with the port as `src/gfx/text.rs`
+
+The original 3x5 font is licensed under the 3-clause BSD license:
+
+  Copyright 1999 Brian J. Swetland
+  Copyright 1999 Vassilii Khachaturov
+  Portions (of vt100.c/vt100.h) copyright Dan Marks
+
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are met:
+  1. Redistributions of source code must retain the above copyright notice, this
+     list of conditions, and the following disclaimer.
+  2. Redistributions in binary form must reproduce the above copyright notice,
+     this list of conditions, and the following disclaimer in the documentation
+     and/or other materials provided with the distribution.
+  3. The name of the authors may not be used to endorse or promote products
+     derived from this software without specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR IMPLIED
+  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
+  EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+  EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+  PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+  BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+  IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+  POSSIBILITY OF SUCH DAMAGE.
+
+Modifications to Tom Thumb for improved readability are by Robey Pointer, see
+http://robey.lag.net/2010/01/23/tiny-monospace-font.html — the original author
+authorised relicensing of those modifications, and Brian Swetland has since
+authorised the font under CC0 or CC-BY 3.0. This port uses it under CC0.
+
+The glyph table in `src/gfx/text.rs` is that font's data, converted from the BDF
+to the Adafruit GFX font format (William Skellenger, 2016) and then to Rust. It
+is not PICO-8's own font, which lives in PICO-8's ROM and is not part of the cart.

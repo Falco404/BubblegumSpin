@@ -3,6 +3,8 @@
 pub mod fb;
 pub mod palette;
 pub mod scenes;
+pub mod sprites;
+pub mod text;
 
 use fb::Fb;
 
