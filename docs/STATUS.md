@@ -3,9 +3,10 @@
 
 ## Now
 **M1–M8 merged and `v0.1.0` released** (Windows, Linux, both confirmed on Windows).
-**Android in review** (issue #18, branch `hermes/android`): A1–A4 in — the save path,
-on-screen controls, the cargo-quad-apk metadata and the CI job; A5 docs and A6 the
-release follow. 254 tests green, `clippy -D warnings` and `fmt --check` clean.
+**Android in review** (issue #18, branch `hermes/android`): the save path, on-screen
+controls, the APK metadata and CI are in, the APK builds, and the first phone crash
+(a 0×0 surface panicking the layout on frame one) is fixed with logcat logging added.
+A6 — the `v0.2.0` release — follows the phone check. 256 tests green.
 
 ## Where we are
 - Milestones are issues #1–#8; issues and PRs share one number sequence.
