@@ -70,6 +70,15 @@ jobs:
             test -e "$want" || ln -s "$have" "$want"
           done
           ls -l "$bin"/aarch64-linux-android-{ar,ld,ranlib}
+          # rustc's Android targets ask for `-lunwind`, which r27 moved out of the
+          # sysroot and into clang's resource directory.
+          sysroot="$ndk/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+          unwind=$(ls "$ndk"/toolchains/llvm/prebuilt/linux-x86_64/lib/clang/*/lib/linux/aarch64/libunwind.a 2>/dev/null | head -1)
+          test -n "$unwind" || { echo "libunwind.a is not in this NDK"; exit 1; }
+          for dir in "$sysroot/usr/lib/aarch64-linux-android/26" "$sysroot/usr/lib/aarch64-linux-android"; do
+            mkdir -p "$dir"
+            test -e "$dir/libunwind.a" || ln -s "$unwind" "$dir/libunwind.a"
+          done
           echo "NDK_HOME=$ndk" >> "$GITHUB_ENV"
       - uses: Swatinem/rust-cache@v2
       - name: Install cargo-quad-apk
