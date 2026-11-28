@@ -7,6 +7,10 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "An existing tag to build and publish, e.g. v0.2.0"
+        required: true
 
 permissions:
   contents: write
@@ -116,14 +120,22 @@ jobs:
             (cd "$dir" && zip -r "../$dir.zip" .)
           done
           ls -l *.zip
-      # `--clobber` makes a re-run of the same tag update the assets instead of failing.
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
+          # `workflow_dispatch` has no tag in `github.ref_name`, so a manual run passes one.
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" \
-            --title "BubblegumSpin ${GITHUB_REF_NAME}" \
-            --notes "Native port of Bubblegum Spin (PICO-8, v1.1) by Bee_Randon. Private, non-commercial use only. Windows and Linux zips, plus an Android APK (arm64, Android 8+, debug-signed: uninstall an older build first). Background music is off by default (\`BGS_MUSIC=1\` turns it on)." \
-            --clobber \
+          set -euo pipefail
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "release $TAG exists; replacing its assets"
+          else
+            gh release create "$TAG" \
+              --title "BubblegumSpin $TAG" \
+              --notes "Native port of Bubblegum Spin (PICO-8, v1.1) by Bee_Randon. Private, non-commercial use only. Windows and Linux zips, plus an Android APK (arm64, Android 8+, debug-signed: uninstall an older build first). Background music is off by default (\`BGS_MUSIC=1\` turns it on)."
+          fi
+          # `--clobber` lives on `upload`, not on `create`: a re-run replaces the assets.
+          gh release upload "$TAG" --clobber \
             dist/bubblegum-spin-windows.zip dist/bubblegum-spin-linux.zip \
             dist/bubblegum-spin-android/*.apk
+          gh release view "$TAG" --json assets --jq '.assets[] | "\(.name) \(.size)"'
