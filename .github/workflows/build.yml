@@ -24,18 +24,20 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - name: Install an NDK cargo-quad-apk understands
+      - name: Prepare the NDK
         run: |
-          # cargo-quad-apk (2025) asks for the per-target binutils wrappers
-          # (aarch64-linux-android-ar / -ld / -ranlib) that the runner's NDK r27
-          # dropped, so it gets r25c, the version macroquad's guide builds with.
-          ndk="$ANDROID_HOME/ndk/25.2.9519653"
-          if [ ! -d "$ndk" ]; then
-            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;25.2.9519653" > /dev/null
-          fi
-          test -x "$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-ld" \
-            || { echo "the r25c toolchain is incomplete"; exit 1; }
+          ndk="${ANDROID_NDK_HOME:-${ANDROID_NDK_LATEST_HOME:-${ANDROID_NDK_ROOT}}}"
+          test -n "$ndk" || { echo "no NDK on the runner"; exit 1; }
           echo "using NDK at $ndk"
+          bin="$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          # NDK r27 ships only `llvm-*`, but the 2025 cargo-quad-apk still looks for
+          # the per-target binutils names (it wanted `ar`, then `ld`). Link them.
+          for pair in ar:llvm-ar ranlib:llvm-ranlib ld:ld.lld strip:llvm-strip nm:llvm-nm objcopy:llvm-objcopy; do
+            want="$bin/aarch64-linux-android-${pair%%:*}"
+            have="$bin/${pair##*:}"
+            test -e "$want" || ln -s "$have" "$want"
+          done
+          ls -l "$bin"/aarch64-linux-android-{ar,ld,ranlib}
           echo "NDK_HOME=$ndk" >> "$GITHUB_ENV"
       - uses: Swatinem/rust-cache@v2
       - name: Install cargo-quad-apk
