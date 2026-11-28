@@ -6,7 +6,7 @@ description = "Native port of Bubblegum Spin by Bee_Randon (PICO-8)"
 license = "proprietary"
 
 [dependencies]
-macroquad = "0.4"
+macroquad = { version = "0.4", features = ["audio"] }
 png = "0.17"
 
 [dev-dependencies]

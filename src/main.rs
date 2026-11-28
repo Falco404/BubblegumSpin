@@ -38,9 +38,16 @@ impl Audio {
             return Some(sound.clone());
         }
         let samples = render_sfx(&Sfx::from_id(id), SAMPLE_RATE);
-        let sound = load_sound_from_bytes(&to_wav(&samples, SAMPLE_RATE))
-            .await
-            .ok()?;
+        let wav = to_wav(&samples, SAMPLE_RATE);
+        let sound = match load_sound_from_bytes(&wav).await {
+            Ok(sound) => sound,
+            Err(err) => {
+                // Say so once per effect instead of failing silently: a missing
+                // audio device and a backend without its feature both land here.
+                eprintln!("audio: sfx {id} could not be loaded: {err}");
+                return None;
+            }
+        };
         self.sfx.insert(id, sound.clone());
         Some(sound)
     }
@@ -50,9 +57,14 @@ impl Audio {
             return Some(sound.clone());
         }
         let samples = render_music(id, SAMPLE_RATE);
-        let sound = load_sound_from_bytes(&to_wav(&samples, SAMPLE_RATE))
-            .await
-            .ok()?;
+        let wav = to_wav(&samples, SAMPLE_RATE);
+        let sound = match load_sound_from_bytes(&wav).await {
+            Ok(sound) => sound,
+            Err(err) => {
+                eprintln!("audio: music {id} could not be loaded: {err}");
+                return None;
+            }
+        };
         self.music.insert(id, sound.clone());
         Some(sound)
     }

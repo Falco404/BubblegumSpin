@@ -57,13 +57,13 @@
 ## Audio
 
 - `.p8` `__sfx__` is **not** the 68-byte RAM layout: a line is 84 bytes of packed
-  five-nibble notes. `tools/p8_import.py` converts; `Sfx::parse` reads the RAM form.
-- Music channel bytes hold **6-bit** sfx ids (pattern 15 is `0x41..0x44` → 1..4), so
-  mask `0x3f`. A note is `speed * 183/22050` s and pitch 0 is C0 = 65.4 Hz.
-- PICO-8's eight waveforms live in its engine, not the cart: ours are shapes, and the
-  2 ms anti-click ramp that starts and ends every buffer on zero is ours too.
-- `sfx(18)` is the fire sound: **two** notes, so 66 ms — not the 0.1–0.4 s the M7 issue
-  guessed. Music is baked lazily and looped by `macroquad`.
+  five-nibble notes, and music channel bytes are **6-bit** sfx ids (`0x41..0x44` → 1..4,
+  so mask `0x3f`). A note is `speed * 183/22050` s; pitch 0 is C0 = 65.4 Hz.
+- **`macroquad`'s `audio` feature is opt-in** (`default = []`): without it `play_sound`
+  links a dummy backend and only prints a warning. `tests/build_config.rs` pins it.
+- PICO-8's waveforms are engine code, not cart data, so ours are shapes; the 2 ms
+  anti-click ramp is ours too. `sfx(18)` is **two** notes = 66 ms, not the M7 issue's
+  "0.1–0.4 s". Music is baked lazily and looped.
 
 ## Save file
 
