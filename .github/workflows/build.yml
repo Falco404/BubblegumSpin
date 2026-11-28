@@ -65,7 +65,11 @@ jobs:
         run: |
           ls -l target/android-artifacts/release/apk/
           apk=$(ls target/android-artifacts/release/apk/*.apk | head -1)
-          "$ANDROID_HOME"/build-tools/*/aapt dump badging "$apk" | head -8
+          tools=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          # aapt2, not aapt: build-tools 31+ dropped the old one, and the glob for
+          # `aapt` used to expand to several versions and print its usage instead.
+          "$tools/aapt2" dump badging "$apk" | head -6
+          "$tools/apksigner" verify --print-certs "$apk" | head -4
       - uses: actions/upload-artifact@v4
         with:
           name: bubblegum-spin-android
