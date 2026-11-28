@@ -4,12 +4,12 @@ A native port of **Bubblegum Spin** (PICO-8, v1.1) by **Bee_Randon**. All game
 design and original art, sound and code are his; this is a private,
 non-commercial reimplementation. See `docs/decisions.md`.
 
-Work in progress: a playable game with the cart's own art and sound. Aim and fire
-(`←`/`→`/`↑`, `X`), the bubble bounces, sticks and twists the mass, matches pop and
-score with their own sound, four shots that clear nothing let the mass shoot back,
-clearing the board starts the next round with one more colour, and touching the wall
-ends the game with your hiscore saved (M1–M7). The menus and the tutorial are M8.
-`docs/STATUS.md` says where we are and `docs/gotchas.md` collects the traps.
+The whole cart is playable: title screen and menu, the how-to pages, the coin drop,
+the game itself (aim and fire with `←`/`→`/`↑` and `X`, hold `Z` to peek at the HUD),
+the score screen with the machine dispensing your gumballs, and a hiscore that
+survives a restart. Background music is off by default — `BGS_MUSIC=1 cargo run`
+turns it on. `docs/STATUS.md` says where we are and `docs/gotchas.md` collects the
+traps.
 
 ## Credits and licences
 

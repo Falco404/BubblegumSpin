@@ -7,18 +7,20 @@
 pub mod bubble;
 pub mod gun;
 pub mod rules;
+pub mod scene;
 pub mod spin;
 
 use std::path::PathBuf;
 
 use crate::board::Board;
-use crate::fixed::{int, Fix};
+use crate::fixed::{int, Fix, HALF};
 use crate::p8math::Rng;
 use crate::save::Save;
 use bubble::{Bubble, SHOT_MAX};
 use gun::Gun;
 use rules::{ScoreText, MIN_COL_CNT, ROUND_CLEAR_FRAMES};
-use spin::{Camera, Fade, Shake, Spin};
+use scene::Btnp;
+use spin::{Camera, Fade, Shake, Spin, Zoom};
 
 /// What the player is holding this frame.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -26,6 +28,9 @@ pub struct Input {
     pub left: bool,
     pub right: bool,
     pub up: bool,
+    pub down: bool,
+    /// The cart's O button: held to peek at the score and the next gumballs.
+    pub peek: bool,
     /// The cart's X button. Firing is edge-triggered (see [`Game::step`]).
     pub fire: bool,
 }
@@ -101,6 +106,12 @@ pub struct Game {
     /// Frames since the game started (cart `t`).
     pub t: i32,
 
+    /// cart `zoom`/`trans_t`/`trans_acc`: the 120-frame zoom between the coin drop and
+    /// the board, and the slow zoom out while the first round plays.
+    pub zoom: Zoom,
+    pub trans_t: i32,
+    pub trans_acc: Fix,
+
     pub fade: Fade,
     pub camera: Camera,
     pub shake: Shake,
@@ -115,8 +126,8 @@ pub struct Game {
     /// Music tracks asked for since the last drain; the last one wins.
     music_queue: Vec<u8>,
 
-    /// Previous state of the fire button, for the press edge.
-    prev_fire: bool,
+    /// The fire button's `btnp` state: a press, then repeats while held.
+    fire_btn: Btnp,
 }
 
 impl Game {
@@ -128,7 +139,18 @@ impl Game {
     /// cart `new_game()`: a hiscore from the save, two colours, and the first
     /// round dealt.
     pub fn new_with_save(seed: u32, save: Save, save_path: Option<PathBuf>) -> Self {
-        let mut game = Self {
+        let mut game = Self::blank(seed, save, save_path);
+        game.new_game();
+        game
+    }
+
+    /// The cart's state at `_init`: no board, no bubbles, nothing dealt yet.
+    ///
+    /// `_init` goes straight to `init_main()`, so the first level only appears when
+    /// the coin drops and `new_game()` runs, and the title screen queues no round
+    /// music.
+    pub fn blank(seed: u32, save: Save, save_path: Option<PathBuf>) -> Self {
+        Self {
             board: Board::new(),
             spin: Spin::new(),
             gun: Gun::new(),
@@ -166,6 +188,9 @@ impl Game {
             round_clear: false,
             round_clear_t: 0,
             t: 0,
+            zoom: Zoom::None,
+            trans_t: 0,
+            trans_acc: int(1),
             fade: Fade::default(),
             camera: Camera::default(),
             shake: Shake::default(),
@@ -173,12 +198,58 @@ impl Game {
             save_path,
             sfx_queue: Vec::new(),
             music_queue: Vec::new(),
-            prev_fire: false,
-        };
-        // cart `new_game()`: `col_cnt = min_col_cnt`, `bonus_shots = -1`, then
-        // `new_round()` does the rest (level, conveyor, first bubble, torque .05).
-        game.new_round();
-        game
+            fire_btn: Btnp::default(),
+        }
+    }
+
+    /// cart `init_game()`: the zoom starts at the top of the coin drop.
+    pub fn start_zoom(&mut self) {
+        self.zoom = Zoom::In;
+        self.trans_t = 0;
+        self.trans_acc = int(50);
+    }
+
+    /// cart `update_zoom_transition()`.
+    ///
+    /// `update_game()` calls this every frame, which is what unwinds the zoom while
+    /// the first round is being played; the `In` half only runs before `new_game()`.
+    pub fn update_zoom_transition(&mut self) {
+        match self.zoom {
+            Zoom::None => {}
+            Zoom::In => {
+                if self.trans_acc > HALF {
+                    self.trans_acc -= HALF;
+                }
+                if self.trans_t == 120 {
+                    // cart `new_game()`: the board is dealt at the top of the zoom.
+                    self.new_game();
+                    self.zoom = Zoom::Out;
+                } else {
+                    self.trans_t += 1;
+                }
+            }
+            Zoom::Out => {
+                if self.trans_acc < int(50) {
+                    self.trans_acc += HALF;
+                }
+                if self.trans_t != 0 {
+                    self.trans_t -= 1;
+                }
+            }
+        }
+    }
+
+    /// cart `new_game()`: everything a run resets, then the first round is dealt.
+    ///
+    /// The hiscore is not touched — it comes from the save and only `check_over`
+    /// beats it — and neither is the clock, which the cart runs in every scene.
+    pub fn new_game(&mut self) {
+        self.over = false;
+        self.score = 0;
+        self.new_hiscore = false;
+        self.col_cnt = MIN_COL_CNT;
+        self.bonus_shots = -1;
+        self.new_round();
     }
 
     /// One frame at 60 Hz: the cart's `_update60` around its `update_game()`.
@@ -187,7 +258,8 @@ impl Game {
         self.fade.step();
 
         if self.over {
-            // cart `update_over`: no shooting, just the cascade.
+            // cart `update_over`: no shooting, just the HUD and the cascade.
+            self.update_hud(input.peek);
             self.drop_bubs();
             self.update_falling();
         } else {
@@ -203,6 +275,7 @@ impl Game {
     /// cart `update_game()`, in the cart's order.
     fn update_game(&mut self, input: &Input) {
         self.update_falling();
+        self.update_zoom_transition();
         self.spin.step();
         self.popping = self.board.advance_animations();
 
@@ -213,7 +286,7 @@ impl Game {
             self.new_round();
         }
 
-        self.update_hud();
+        self.update_hud(input.peek);
 
         if self.check_over() || self.round_clear {
             return;
@@ -232,10 +305,9 @@ impl Game {
             self.reset_bubble();
         }
 
-        // The cart uses `btnp(X)`: only a fresh press fires, not a held button.
-        let pressed = input.fire && !self.prev_fire;
-        self.prev_fire = input.fire;
-        if pressed && !self.in_flight {
+        // cart `btnp(X)`: a press fires, and holding the trigger repeats like the
+        // cart does (after 15 frames, then every 4) whenever the last shot has landed.
+        if self.fire_btn.press(input.fire) && !self.in_flight {
             self.in_flight = true;
             self.fire();
         }
@@ -261,17 +333,19 @@ impl Game {
         }
     }
 
-    /// cart `update_hud()`: the hint timer and the two sliding cards.
-    fn update_hud(&mut self) {
+    /// cart `update_hud()`: the hint timer, the O-button peek and the two sliding
+    /// cards. Holding O shows the score and the next gumballs until it is released.
+    fn update_hud(&mut self, peek: bool) {
         if self.hud_t > 0 {
             self.show_hud = true;
             self.hud_t -= 1;
         } else {
             self.show_hud = false;
         }
+        if peek && !self.over {
+            self.show_hud = true;
+        }
 
-        // The O-button peek is part of the M8 input map; until then the cards
-        // follow the hint timer only.
         let (target_s, target_n) = if self.show_hud {
             (int(12), int(108))
         } else {
@@ -402,5 +476,49 @@ mod tests {
             g.step(&Input::default());
         }
         assert_eq!(g.t, 17);
+    }
+
+    #[test]
+    fn holding_o_shows_the_hud_cards_and_releasing_it_hides_them() {
+        // cart `update_hud()`: `if btn(O) and not over then show_hud=true`.
+        let mut g = Game::new(7);
+        let peek = Input {
+            peek: true,
+            ..Default::default()
+        };
+        for _ in 0..40 {
+            g.step(&peek);
+        }
+        assert!(g.show_hud);
+        assert!(
+            to_int(g.score_card_y) > -28 && to_int(g.nxt_card_y) < 136,
+            "the cards are sliding in: {} / {}",
+            to_int(g.score_card_y),
+            to_int(g.nxt_card_y)
+        );
+
+        // The "your turn" hint keeps the cards up on its own, so clear it to see the
+        // peek's own effect: released, they slide back out.
+        g.hud_t = 0;
+        for _ in 0..40 {
+            g.step(&Input::default());
+        }
+        assert!(!g.show_hud, "released, so the cards go back");
+    }
+
+    #[test]
+    fn the_peek_does_nothing_after_the_game_is_over() {
+        let mut g = Game::new(7);
+        g.hud_t = 0; // no "your turn" hint left to hold the cards up
+        g.board.0.insert(270, 3);
+        let peek = Input {
+            peek: true,
+            ..Default::default()
+        };
+        for _ in 0..60 {
+            g.step(&peek);
+        }
+        assert!(g.over);
+        assert!(!g.show_hud, "the cart guards the peek with `not over`");
     }
 }

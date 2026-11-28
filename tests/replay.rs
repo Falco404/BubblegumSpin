@@ -14,7 +14,9 @@ const GOLDEN: u64 = 1_727_884_017_847_571_997;
 /// The four-wall-shot session.
 const GOLDEN_PUNISHMENT: u64 = 12_920_328_043_318_786_186;
 /// The game-over cascade.
-const GOLDEN_GAME_OVER: u64 = 13_802_502_266_527_163_046;
+// Re-recorded in M8.1: the cart's `update_over()` calls `update_hud()` before it
+// drops the board, so the HUD cards keep easing during the cascade.
+const GOLDEN_GAME_OVER: u64 = 1_465_561_596_270_162_901;
 
 /// A fixed input timeline. Six shots: left, right, upright, straight up again,
 /// left again, and one with a held fire button (which must not fire twice).

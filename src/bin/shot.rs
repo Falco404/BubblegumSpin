@@ -7,8 +7,9 @@
 //! cargo run --bin shot -- --scene game --frames 12 --fire 1 --out out/m4-fire.png
 //! ```
 
-use bubblegum_spin::fixed::{from_f64, Fix};
-use bubblegum_spin::gfx::{fb::Fb, palette_card, scenes::draw_game};
+use bubblegum_spin::fixed::{from_f64, to_f64, Fix};
+use bubblegum_spin::gfx::{fb::Fb, menus, palette_card, scenes::draw_game, scenes::fade_scr};
+use bubblegum_spin::sim::scene::{App, Scene, FINAL_NAV};
 use bubblegum_spin::sim::{Game, Input};
 
 struct Args {
@@ -96,6 +97,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             draw_game(&mut fb, &game);
         }
+        "main" | "how" | "coin" | "final" => {
+            // The scenes around the game, driven by the same machine the window uses.
+            let mut app = app_for(&args.scene, args.seed);
+            for _ in 0..args.frames {
+                app.step(&Input::default());
+            }
+            fade_scr(&mut fb, to_f64(app.game.fade.value));
+            menus::draw(&mut fb, &app);
+        }
         other => return Err(format!("unknown scene: {other}").into()),
     }
 
@@ -105,4 +115,58 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     fb.to_png(&args.out)?;
     println!("wrote {}", args.out);
     Ok(())
+}
+
+/// Put the scene machine on the screen the caller asked for.
+///
+/// `how` and `coin` are reached the way a player reaches them (a tap on the menu);
+/// `final` is set up directly, because playing a whole game to lose it is not a
+/// screenshot.
+fn app_for(scene: &str, seed: u32) -> App {
+    let mut app = App::new(seed);
+    match scene {
+        "how" => {
+            settle(&mut app);
+            app.step(&Input {
+                down: true,
+                ..Default::default()
+            });
+            app.step(&Input::default());
+            app.step(&Input {
+                fire: true,
+                ..Default::default()
+            });
+            app.step(&Input::default());
+        }
+        "coin" => {
+            settle(&mut app);
+            app.step(&Input {
+                fire: true,
+                ..Default::default()
+            });
+            app.step(&Input::default());
+        }
+        "final" => {
+            app.game.new_game();
+            app.game.score = 700;
+            app.game.fade.finish_in();
+            app.scene = Scene::Final;
+            app.nav = &FINAL_NAV;
+            app.finalani = 1;
+            app.gumballs = 7;
+            app.blow_force = 7;
+        }
+        _ => {}
+    }
+    app
+}
+
+/// Step until the title's fade has finished, as the cart's `faded` flag does.
+fn settle(app: &mut App) {
+    for _ in 0..200 {
+        if app.game.fade.faded {
+            return;
+        }
+        app.step(&Input::default());
+    }
 }

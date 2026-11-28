@@ -18,15 +18,19 @@ Everything is plain `cargo`; there are no scripts and no environment variables.
 
 | What | Command | Output |
 |---|---|---|
-| Window (4x scale, 512x512) | `cargo run` | the board scene, with effects |
+| Window (4x scale, 512x512) | `cargo run` | the title screen: press X to play |
 | Headless screenshot | `cargo run --bin shot` | `out/m1.png` (128x128 RGB) |
 | Board scene screenshot | `cargo run --bin shot -- --scene game --out out/game.png` | one frame |
 | ... rotated a quarter turn | `cargo run --bin shot -- --scene game --spin 0.25 --out out/spin.png` | one frame |
 | ... aimer turned | `cargo run --bin shot -- --scene game --aim 0.30 --out out/aim.png` | one frame |
 | ... a bubble in flight | `cargo run --bin shot -- --scene game --frames 8 --fire 1 --out out/fired.png` | one frame, `--fire` is a 0-based frame index |
 | ... the game-over cascade | `cargo run --bin shot -- --scene over --frames 14 --out out/over.png` | one frame, one gumball planted past the wall |
+| Title screen | `cargo run --bin shot -- --scene main --frames 60 --out out/main.png` | one frame, after the 50-frame fade |
+| How to play | `cargo run --bin shot -- --scene how --out out/how.png` | page one |
+| Coin drop | `cargo run --bin shot -- --scene coin --frames 100 --out out/coin.png` | one frame, mid-drop |
+| Score screen | `cargo run --bin shot -- --scene final --frames 500 --out out/final.png` | a 700-point score, menu up |
 | Level as ASCII | `cargo run --bin board_dump` | 25 rows of `.` `W` `8` `9` |
-| Golden frames | `cargo test --test screens` | byte-compares 5 frames with `tests/golden/` |
+| Golden frames | `cargo test --test screens` | byte-compares 9 frames with `tests/golden/` |
 | Re-record goldens | `UPDATE_GOLDENS=1 cargo test --test screens` | rewrites `tests/golden/*.png` after an intended visual change |
 | Re-extract the art | `python3 tools/p8_import.py` | `assets/{sprites,map,sfx,music}.bin` from the cart |
 | Hear one sound | `cargo run --bin wav_dump -- --sfx 18 --out out/fire.wav` | a WAV you can play |
@@ -37,6 +41,18 @@ Everything is plain `cargo`; there are no scripts and no environment variables.
 
 `out/` is gitignored. Screenshots are the primary visual evidence in PRs: render
 with `shot`, attach the PNG, and quote the size.
+
+## Controls
+
+| Key | Cart button | Does |
+|---|---|---|
+| `←`/`→` (A/D) | left/right | aim |
+| `↑` (W) | up | return the aimer to upright; move the menu up |
+| `↓` (S) | down | move the menu down |
+| `X` (K) | X | fire — hold it and it repeats like `btnp`; in a menu, pick |
+| `Z` (J) | O | hold to peek at the score, the next gumballs and your remaining misses |
+
+The titles screen's menu is `↑`/`↓` then `X`; the score screen works the same way.
 
 ## Generated code
 
