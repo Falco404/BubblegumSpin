@@ -12,7 +12,7 @@
 //! Getting this wrong yields `nil` cells from sector lookups and a mirrored
 //! aim; see `docs/decisions.md`.
 
-use crate::fixed::{from_f64, int, mul, to_f64, Fix};
+use crate::fixed::{from_f64, int, mul, to_f64, Fix, ONE};
 
 /// PICO-8 `sin`: 0..1 turns, y inverted to suit screenspace, so `sin(0.25) == -1`.
 #[inline]
@@ -116,6 +116,28 @@ impl Rng {
     pub fn colour(&mut self, col_cnt: i32) -> u8 {
         (crate::fixed::to_int(mul(self.rnd(), int(col_cnt))) + 1) as u8
     }
+}
+
+/// cart `bezier_eval()`: de Casteljau, evaluated recursively exactly as the cart does.
+///
+/// The cart builds a new, shorter control polygon by lerping each pair, and recurses
+/// until one point is left. With two points it is a plain lerp; the recursion only
+/// matters for the three-point curves the coin and the dispensing gumballs use.
+pub fn bezier(curve: &[(Fix, Fix)], frac: Fix) -> (Fix, Fix) {
+    if curve.len() <= 1 {
+        return curve.first().copied().unwrap_or((0, 0));
+    }
+    let mut next = Vec::with_capacity(curve.len() - 1);
+    for pair in curve.windows(2) {
+        let (p0, p1) = (pair[0], pair[1]);
+        next.push((lerp(p0.0, p1.0, frac), lerp(p0.1, p1.1, frac)));
+    }
+    bezier(&next, frac)
+}
+
+/// cart `lerp()`: `p0*(1-frac) + p1*frac`, in the cart's own fixed point.
+pub fn lerp(p0: Fix, p1: Fix, frac: Fix) -> Fix {
+    mul(p0, ONE - frac) + mul(p1, frac)
 }
 
 #[cfg(test)]

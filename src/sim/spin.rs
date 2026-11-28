@@ -77,6 +77,19 @@ pub enum FadeState {
     Out,
 }
 
+/// cart `zoom`: the coin-drop screen's 120-frame zoom into the board, then the slow
+/// zoom back out while the game plays (the cart runs both inside `update_game`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Zoom {
+    /// Not in a transition.
+    #[default]
+    None,
+    /// Zooming in: `trans_t` climbs to 120 and `new_game()` is dealt at the top.
+    In,
+    /// Zooming back out during play: `trans_t` falls to 0.
+    Out,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Fade {
     pub value: Fix,
@@ -110,6 +123,13 @@ impl Fade {
         self.value = ONE;
         self.state = FadeState::In;
         self.faded = false;
+    }
+
+    /// cart `init_retry()`'s `fade=0; faded=true`: no fade at all, ready now.
+    pub fn finish_in(&mut self) {
+        self.value = 0;
+        self.state = FadeState::Idle;
+        self.faded = true;
     }
 
     pub fn step(&mut self) {

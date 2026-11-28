@@ -132,6 +132,7 @@ fn read_input() -> Input {
         left: is_key_down(KeyCode::Left) || is_key_down(KeyCode::A),
         right: is_key_down(KeyCode::Right) || is_key_down(KeyCode::D),
         up: is_key_down(KeyCode::Up) || is_key_down(KeyCode::W),
+        down: is_key_down(KeyCode::Down) || is_key_down(KeyCode::S),
         // The cart's X button; Z is its O button, which M5 will use.
         fire: is_key_down(KeyCode::X) || is_key_down(KeyCode::K),
     }

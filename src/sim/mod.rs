@@ -7,18 +7,19 @@
 pub mod bubble;
 pub mod gun;
 pub mod rules;
+pub mod scene;
 pub mod spin;
 
 use std::path::PathBuf;
 
 use crate::board::Board;
-use crate::fixed::{int, Fix};
+use crate::fixed::{int, Fix, HALF};
 use crate::p8math::Rng;
 use crate::save::Save;
 use bubble::{Bubble, SHOT_MAX};
 use gun::Gun;
 use rules::{ScoreText, MIN_COL_CNT, ROUND_CLEAR_FRAMES};
-use spin::{Camera, Fade, Shake, Spin};
+use spin::{Camera, Fade, Shake, Spin, Zoom};
 
 /// What the player is holding this frame.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -26,6 +27,7 @@ pub struct Input {
     pub left: bool,
     pub right: bool,
     pub up: bool,
+    pub down: bool,
     /// The cart's X button. Firing is edge-triggered (see [`Game::step`]).
     pub fire: bool,
 }
@@ -101,6 +103,12 @@ pub struct Game {
     /// Frames since the game started (cart `t`).
     pub t: i32,
 
+    /// cart `zoom`/`trans_t`/`trans_acc`: the 120-frame zoom between the coin drop and
+    /// the board, and the slow zoom out while the first round plays.
+    pub zoom: Zoom,
+    pub trans_t: i32,
+    pub trans_acc: Fix,
+
     pub fade: Fade,
     pub camera: Camera,
     pub shake: Shake,
@@ -128,7 +136,18 @@ impl Game {
     /// cart `new_game()`: a hiscore from the save, two colours, and the first
     /// round dealt.
     pub fn new_with_save(seed: u32, save: Save, save_path: Option<PathBuf>) -> Self {
-        let mut game = Self {
+        let mut game = Self::blank(seed, save, save_path);
+        game.new_game();
+        game
+    }
+
+    /// The cart's state at `_init`: no board, no bubbles, nothing dealt yet.
+    ///
+    /// `_init` goes straight to `init_main()`, so the first level only appears when
+    /// the coin drops and `new_game()` runs, and the title screen queues no round
+    /// music.
+    pub fn blank(seed: u32, save: Save, save_path: Option<PathBuf>) -> Self {
+        Self {
             board: Board::new(),
             spin: Spin::new(),
             gun: Gun::new(),
@@ -166,6 +185,9 @@ impl Game {
             round_clear: false,
             round_clear_t: 0,
             t: 0,
+            zoom: Zoom::None,
+            trans_t: 0,
+            trans_acc: int(1),
             fade: Fade::default(),
             camera: Camera::default(),
             shake: Shake::default(),
@@ -174,11 +196,57 @@ impl Game {
             sfx_queue: Vec::new(),
             music_queue: Vec::new(),
             prev_fire: false,
-        };
-        // cart `new_game()`: `col_cnt = min_col_cnt`, `bonus_shots = -1`, then
-        // `new_round()` does the rest (level, conveyor, first bubble, torque .05).
-        game.new_round();
-        game
+        }
+    }
+
+    /// cart `init_game()`: the zoom starts at the top of the coin drop.
+    pub fn start_zoom(&mut self) {
+        self.zoom = Zoom::In;
+        self.trans_t = 0;
+        self.trans_acc = int(50);
+    }
+
+    /// cart `update_zoom_transition()`.
+    ///
+    /// `update_game()` calls this every frame, which is what unwinds the zoom while
+    /// the first round is being played; the `In` half only runs before `new_game()`.
+    pub fn update_zoom_transition(&mut self) {
+        match self.zoom {
+            Zoom::None => {}
+            Zoom::In => {
+                if self.trans_acc > HALF {
+                    self.trans_acc -= HALF;
+                }
+                if self.trans_t == 120 {
+                    // cart `new_game()`: the board is dealt at the top of the zoom.
+                    self.new_game();
+                    self.zoom = Zoom::Out;
+                } else {
+                    self.trans_t += 1;
+                }
+            }
+            Zoom::Out => {
+                if self.trans_acc < int(50) {
+                    self.trans_acc += HALF;
+                }
+                if self.trans_t != 0 {
+                    self.trans_t -= 1;
+                }
+            }
+        }
+    }
+
+    /// cart `new_game()`: everything a run resets, then the first round is dealt.
+    ///
+    /// The hiscore is not touched — it comes from the save and only `check_over`
+    /// beats it — and neither is the clock, which the cart runs in every scene.
+    pub fn new_game(&mut self) {
+        self.over = false;
+        self.score = 0;
+        self.new_hiscore = false;
+        self.col_cnt = MIN_COL_CNT;
+        self.bonus_shots = -1;
+        self.new_round();
     }
 
     /// One frame at 60 Hz: the cart's `_update60` around its `update_game()`.
@@ -187,7 +255,8 @@ impl Game {
         self.fade.step();
 
         if self.over {
-            // cart `update_over`: no shooting, just the cascade.
+            // cart `update_over`: no shooting, just the HUD and the cascade.
+            self.update_hud();
             self.drop_bubs();
             self.update_falling();
         } else {
@@ -203,6 +272,7 @@ impl Game {
     /// cart `update_game()`, in the cart's order.
     fn update_game(&mut self, input: &Input) {
         self.update_falling();
+        self.update_zoom_transition();
         self.spin.step();
         self.popping = self.board.advance_animations();
 
