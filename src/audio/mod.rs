@@ -140,51 +140,62 @@ impl Noise {
 
 /// One sample of a waveform at a phase in 0..1.
 ///
-/// The eight shapes are PICO-8's set by number: sine, triangle, tilted saw, saw,
-/// square, pulse, organ, noise. The exact sample tables live in PICO-8's engine, so
-/// these are shapes, not bit-identical copies.
+/// The eight shapes are PICO-8's instruments **by number**: 0 triangle, 1 tilted saw,
+/// 2 saw, 3 square, 4 pulse, 5 organ, 6 noise, 7 phaser (PICO-8 manual and the SFX
+/// editor's instrument list). The exact 64-sample tables live in PICO-8's engine, so
+/// these are the same shapes, not bit-identical copies.
+///
+/// Getting these numbers right matters: the cart's music is written for the **organ**,
+/// so rendering that index as a pulse turns every note into a buzzy, high-harmonic
+/// tone over the tune.
 pub fn wave_value(wave: u8, phase: f32, noise: &mut Noise) -> f32 {
     use std::f32::consts::TAU;
     match wave & 7 {
-        0 => (TAU * phase).sin(),
-        1 => {
-            if phase < 0.5 {
-                4.0 * phase - 1.0
-            } else {
-                3.0 - 4.0 * phase
-            }
-        }
+        // Triangle: down to -1 at the period's edges, up to +1 in the middle.
+        0 => 1.0 - 4.0 * (phase - 0.5).abs(),
         // Tilted saw: rises over three quarters of the period, falls over the last.
-        2 => {
+        1 => {
             if phase < 0.75 {
                 phase / 0.75 * 2.0 - 1.0
             } else {
                 1.0 - (phase - 0.75) / 0.25 * 2.0
             }
         }
-        3 => 2.0 * phase - 1.0,
-        4 => {
+        2 => 2.0 * phase - 1.0,
+        3 => {
             if phase < 0.5 {
                 1.0
             } else {
                 -1.0
             }
         }
-        5 => {
-            if phase < 0.25 {
+        // Pulse: square with a third of a period high.
+        4 => {
+            if phase < 1.0 / 3.0 {
                 1.0
             } else {
                 -1.0
             }
         }
-        // Organ: a sine with a strong octave and a quiet two-octave harmonic.
-        6 => {
+        // Organ: a sine with a strong octave and a quiet two-octave harmonic — soft,
+        // with no sample at the rails, which is what keeps chords from sounding buzzy.
+        5 => {
             let (s1, s2, s4) = (
                 (TAU * phase).sin(),
                 (2.0 * TAU * phase).sin(),
                 (4.0 * TAU * phase).sin(),
             );
             (s1 + 0.5 * s2 + 0.25 * s4) / 1.75
+        }
+        // Phaser: a pulse whose duty closes across the period, which is the swooping,
+        // hollow quality of instrument 7.
+        7 => {
+            let duty = 0.5 - 0.35 * phase;
+            if phase < duty {
+                1.0
+            } else {
+                -1.0
+            }
         }
         _ => noise.sample(),
     }
@@ -285,8 +296,8 @@ pub fn pattern(id: u8) -> [u8; CHANNELS] {
 /// Render a music track, starting at pattern `start`, to mono samples.
 ///
 /// Patterns play in order until one is flagged as a loop end (bit 1) or stop (bit 2),
-/// inclusive; `macroquad` then loops the buffer. The four channels are mixed and
-/// divided by four so the sum cannot clip. A 2 ms ramp at each end keeps the loop
+/// inclusive; `macroquad` then loops the buffer. The four channels are summed and
+/// halved, which keeps them at the level of the effects without hard-clipping. A 2 ms ramp at each end keeps the loop
 /// seam click-free, which is why the last sample equals the first.
 pub fn render_music(start: u8, sample_rate: u32) -> Vec<f32> {
     const MAX_SECONDS: f32 = 60.0;
@@ -316,7 +327,11 @@ pub fn render_music(start: u8, sample_rate: u32) -> Vec<f32> {
                 for channel in &rendered {
                     sum += channel.get(i).copied().unwrap_or(0.0);
                 }
-                out.push(sum / CHANNELS as f32);
+                // Half, not a quarter: four voices at PICO-8's volumes stay audible
+                // next to the effects (a single voice) and still cannot hard-clip —
+                // the organ's soft shape peaks around 0.3. Measured, not guessed: see
+                // `the_music_is_an_organ_and_stays_clear`.
+                out.push(sum / 2.0);
             }
         }
 
@@ -411,7 +426,71 @@ mod tests {
     }
 
     #[test]
-    fn a_sine_at_441_hz_crosses_zero_882_times_a_second() {
+    fn the_instruments_are_numbered_like_pico8s_listing() {
+        // PICO-8's SFX editor lists its instruments in this order and the cart writes
+        // those numbers, so a table shifted by one silently changes every sound.
+        let mut noise = Noise::new(1);
+        fn at(wave: u8, phase: f32, noise: &mut Noise) -> f32 {
+            wave_value(wave, phase, noise)
+        }
+
+        // 0 triangle: +1 in the middle of the period, -1 at its edges.
+        assert_eq!(at(0, 0.5, &mut noise), 1.0);
+        assert_eq!(at(0, 0.0, &mut noise), -1.0);
+        assert_eq!(at(0, 0.25, &mut noise), 0.0);
+
+        // 1 tilted saw: still rising three quarters of the way through.
+        assert!(at(1, 0.7, &mut noise) > 0.8);
+
+        // 2 saw: linear, so half way is zero and a quarter is -0.5.
+        assert_eq!(at(2, 0.5, &mut noise), 0.0);
+        assert_eq!(at(2, 0.25, &mut noise), -0.5);
+
+        // 3 square: high for the first half, low for the second.
+        assert_eq!(at(3, 0.25, &mut noise), 1.0);
+        assert_eq!(at(3, 0.75, &mut noise), -1.0);
+
+        // 4 pulse: still high at 0.3, already low by 0.4 — a third, not a half.
+        assert_eq!(at(4, 0.3, &mut noise), 1.0);
+        assert_eq!(at(4, 0.4, &mut noise), -1.0);
+
+        // 5 organ: soft, so no sample sits on the rails like every square-ish shape.
+        for i in 0..64 {
+            let v = at(5, i as f32 / 64.0, &mut noise);
+            assert!(v.abs() < 0.99, "organ sample {i} is at {v}");
+        }
+
+        // 7 phaser: a closing pulse, so it parts from 4 late in the period.
+        assert_eq!(at(7, 0.35, &mut noise), 1.0);
+        assert_eq!(at(4, 0.35, &mut noise), -1.0);
+    }
+
+    #[test]
+    fn the_music_is_an_organ_and_stays_clear() {
+        // The round theme is written for the organ (instrument 5) on all four channels.
+        // While instrument 5 was rendered as a pulse the tune was still recognisable,
+        // but every note carried a buzzy harmonic layer on top — "another track over
+        // the music". Buzz shows up as sample-to-sample jumpiness: measure that.
+        // Measured on out/music16.wav: organ 0.055, pulse 0.18.
+        let samples = render_music(16, SAMPLE_RATE);
+        let jumps: Vec<f32> = samples.windows(2).map(|w| w[1] - w[0]).collect();
+        let roughness = rms(&jumps) / rms(&samples);
+        assert!(
+            roughness < 0.10,
+            "the music is buzzy: roughness {roughness:.3} (organ 0.055, pulse 0.18)"
+        );
+        // Four voices summed and halved must not reach the rails.
+        assert!(peak(&samples) < 0.9, "music peaks at {}", peak(&samples));
+        let seconds = samples.len() as f32 / SAMPLE_RATE as f32;
+        assert!(
+            (seconds - 13.652).abs() < 0.01,
+            "the round theme is {seconds:.3} s"
+        );
+    }
+
+    #[test]
+    fn a_tone_at_441_hz_crosses_zero_882_times_a_second() {
+        // Instrument 0 is the triangle, not a sine, but the fundamental is the same.
         let mut noise = Noise::new(1);
         let samples: Vec<f32> = (0..44_100)
             .map(|i| {
@@ -422,14 +501,14 @@ mod tests {
         let crossings = zero_crossings(&samples);
         assert!(
             (crossings as i32 - 882).abs() <= 2,
-            "sine crosses {crossings} times"
+            "instrument 0 crosses {crossings} times"
         );
     }
 
     #[test]
     fn noise_is_not_periodic() {
         let mut noise = Noise::new(7);
-        let samples: Vec<f32> = (0..1_000).map(|_| wave_value(7, 0.0, &mut noise)).collect();
+        let samples: Vec<f32> = (0..1_000).map(|_| wave_value(6, 0.0, &mut noise)).collect();
         // A tone repeats; noise does not: consecutive samples are unrelated.
         let same_sign = samples
             .windows(2)

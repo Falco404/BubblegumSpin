@@ -16,8 +16,7 @@
   compare against the quantised constant, never the decimal.
 - `sin`/`atan2` are **y-inverted** and run **anticlockwise**: `sin(0.25) = -1`, and a
   quarter turn sends `(72,64)` to `(64,56)` while `(64,64)` never moves.
-- `px2rpx` is **not bit-exact** (`f64` quantised, worst 324/65536 px); `mid(lo,v,hi)`
-  needs sorted bounds, though the cart tolerates `lo > hi`.
+- `px2rpx` is **not bit-exact** (`f64`, worst 324/65536 px); `mid` needs sorted bounds.
 
 ## Torque and aiming
 
@@ -61,9 +60,10 @@
   so mask `0x3f`). A note is `speed * 183/22050` s; pitch 0 is C0 = 65.4 Hz.
 - **`macroquad`'s `audio` feature is opt-in** (`default = []`): without it `play_sound`
   links a dummy backend and only prints a warning. `tests/build_config.rs` pins it.
-- PICO-8's waveforms are engine code, not cart data, so ours are shapes; the 2 ms
-  anti-click ramp is ours too. `sfx(18)` is **two** notes = 66 ms, not the M7 issue's
-  "0.1–0.4 s". Music is baked lazily and looped.
+- PICO-8's instruments are **numbered** 0 triangle, 1 tilted saw, 2 saw, 3 square, 4 pulse,
+  5 organ, 6 noise, 7 phaser; shifted, the organ is a buzz the tune hides (`..._stays_clear`).
+- `sfx(18)` is **two** notes = 66 ms, not the M7 issue's "0.1–0.4 s". Music is baked
+  lazily and looped, and the 2 ms anti-click ramp is ours.
 
 ## Save file
 
