@@ -52,7 +52,11 @@ jobs:
           echo "NDK_HOME=$ndk" >> "$GITHUB_ENV"
       - uses: Swatinem/rust-cache@v2
       - name: Install cargo-quad-apk
-        run: cargo install cargo-quad-apk --locked
+        run: |
+          # Pinned to master: the 0.1.4 crates.io release still shells out to `dx`,
+          # which build-tools 31+ replaced with `d8`.
+          cargo install --git https://github.com/not-fl3/cargo-quad-apk \
+            --rev d411c8fe1c08339e46d7dc6b40ac04ea5e3a01b6 --locked
       - name: Build the APK
         run: cargo quad-apk build --release
       - name: Show what was built
