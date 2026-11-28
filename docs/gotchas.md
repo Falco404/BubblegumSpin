@@ -37,8 +37,7 @@
 - `pal()`/`palt()` apply **when the pixel is drawn** (a later reset must not repaint); colour
   0 is transparent, which `cls`/`rectfill`/`pset` ignore and `spr`/`sspr` honour.
 - `map()` is 128×16 tiles, i.e. the **whole 128×128 screen**: assert on map pixels, not the corner.
-- **PICO-8's font is not in the cart** (it is in the ROM at `0x5600`); `__gfx__` is sprites
-  only. The port bundles Tom Thumb at PICO-8's 4 px advance, 6 px line.
+- **PICO-8's font is not in the cart** (it is in the ROM at `0x5600`); the port bundles Tom Thumb at PICO-8's 4 px advance.
 - Golden frames are byte-compared PNGs in `tests/golden/`; re-record with
   `UPDATE_GOLDENS=1 cargo test --test screens` after an intended visual change.
 
@@ -65,6 +64,10 @@
   (`dw=(32/y)*3+2` goes negative above the machine), so clamp the size, not the sign.
 - `btnp` is press, then every 4 frames after 15 held: firing and both menus use it, so a held `X` repeats.
 - The how-to text's `y` is 1-based (`i*8+1-2`); its pink pass is a drop shadow one pixel *below*.
+
+## Releases
+
+- `gh release create` has no `--clobber` (that is an `upload` flag); a `workflow_dispatch` run needs the tag as an input.
 
 ## Android
 

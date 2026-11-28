@@ -2,9 +2,9 @@
 <!-- Keep under 40 lines. Rewrite, don't append. -->
 
 ## Now
-**M1–M8 merged; `v0.2.0` being cut.** Windows, Linux and Android all confirmed working:
-the phone runs it, audio works, the pad is 2.1x bigger, back quits. 259 tests green,
-`clippy -D warnings` and `fmt --check` clean.
+**M1–M8 merged and `v0.2.0` released** — Windows, Linux and Android, all three confirmed
+on real hardware; the release's assets were downloaded back and hashed. 259 tests green,
+`clippy -D warnings` and `fmt --check` clean. `main` = the #21 merge.
 
 ## Where we are
 - Milestones are issues #1–#8; issues and PRs share one number sequence.
@@ -23,17 +23,17 @@ the phone runs it, audio works, the pad is 2.1x bigger, back quits. 259 tests gr
   `[package.metadata.android]`, the `android` CI job, logcat panics, and `App::back()`.
 
 ## Next step
-**Tag `v0.2.0`** once this version bump is merged: the tag builds Windows, Linux and the
-APK and attaches all three to the release. Then the open work is the music (still muted)
-and, if reinstall-in-place ever matters, a stable Android signing key.
+**The music.** It has been muted since M7: the notes, timing and volumes are the cart's,
+the eight instrument *numbers* are right, but the tracks still do not sound like the cart.
+`BGS_MUSIC=1` plays them. Also worth doing: a stable Android signing key (a repo secret)
+so an APK updates in place, and the release workflow's fixed publish step has not run
+since — the next tag is its first test.
 
 ## Gotchas
 `docs/gotchas.md` (77/80). Three that must never slip: never commit `assets/upstream/`,
 PICO-8 trig is y-inverted, and the APK's bin/.so/package names must be one word.
 
 ## Open questions for the human
-1. **Music** is still muted (`BGS_MUSIC=1` to hear it); it needs another pass, not a fix.
-2. **Volume keys** do nothing on the phone: miniquad's Java `onKey` swallows every key.
-   Options were leave it, an in-game volume row, or vendoring a patched miniquad.
-3. Whether the thumb wants a **500 px pad** — 42% of the width is the current cap and
-   there is room above 453.
+1. **Music**: another listening pass, or drop the port of the tracks for good?
+2. **Volume keys** do nothing on the phone (miniquad's Java `onKey` swallows every key);
+   you said the buttons are not needed, so it is parked.
