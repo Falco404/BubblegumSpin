@@ -123,7 +123,7 @@ jobs:
         run: |
           gh release create "${GITHUB_REF_NAME}" \
             --title "BubblegumSpin ${GITHUB_REF_NAME}" \
-            --notes "Native port of Bubblegum Spin (PICO-8, v1.1) by Bee_Randon. Private, non-commercial use only. Windows and Linux binaries below; background music is off by default (\`BGS_MUSIC=1\` turns it on)." \
+            --notes "Native port of Bubblegum Spin (PICO-8, v1.1) by Bee_Randon. Private, non-commercial use only. Windows and Linux zips, plus an Android APK (arm64, Android 8+, debug-signed: uninstall an older build first). Background music is off by default (\`BGS_MUSIC=1\` turns it on)." \
             --clobber \
             dist/bubblegum-spin-windows.zip dist/bubblegum-spin-linux.zip \
             dist/bubblegum-spin-android/*.apk
