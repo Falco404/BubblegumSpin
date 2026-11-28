@@ -101,6 +101,7 @@ impl Game {
 
     /// cart `check_clear()`: the board ran out of colours.
     pub fn check_clear(&mut self) {
+        self.music(34); // music round clear
         if self.col_cnt < MAX_COL_CNT {
             self.col_cnt += 1;
         }
@@ -111,6 +112,7 @@ impl Game {
     /// cart `new_round()`: a fresh level with one more colour, a new conveyor and
     /// the slow opening spin.
     pub fn new_round(&mut self) {
+        self.music(16); // music game
         self.board.set_level(&mut self.rng, self.col_cnt);
         self.col_pool = self.board.pool();
         self.nxt_nxt_col = self.rnd_col();
@@ -154,6 +156,7 @@ impl Game {
         }
 
         self.over = true;
+        self.music(32); // music game over
         self.shake.amount = from_f64(2.0);
         self.drop_t = 0;
         self.f_bubs = std::mem::take(&mut self.bubs);
@@ -224,6 +227,7 @@ mod tests {
     use crate::fixed::{from_f64, int, to_int};
     use crate::grid::CENTER;
     use crate::sim::bubble::SHOT_MAX;
+    use crate::sim::gun::A_MIN;
     use crate::sim::{Game, Input};
 
     fn board_from(pairs: &[(u16, u16)]) -> Board {
@@ -522,5 +526,87 @@ mod tests {
     fn the_easing_does_nothing_when_already_there() {
         let (y, dy) = ease_in_out(int(12), int(12), 0);
         assert_eq!((y, dy), (int(12), 0));
+    }
+
+    #[test]
+    fn every_event_the_cart_sounded_queues_the_same_effect() {
+        // fire
+        let mut g = Game::new(7);
+        g.step(&fired());
+        assert!(g.take_sfx().contains(&18), "fire");
+
+        // a wall bounce
+        let mut g = Game::new(7);
+        g.gun.a = A_MIN;
+        g.step(&fired());
+        let mut heard = Vec::new();
+        for _ in 0..60 {
+            g.step(&still());
+            heard.extend(g.take_sfx());
+        }
+        assert!(heard.contains(&8), "bounce: {heard:?}");
+
+        // a match, and the placement that found it
+        let mut g = Game::new(7);
+        g.board = board_from(&[(CENTER, ANCHOR), (240, 3), (241, 3)]);
+        g.col_pool = vec![1, 2];
+        g.place_bubble(242, 3);
+        assert!(g.take_sfx().contains(&12), "match");
+
+        // a placement that matches nothing is a "hit"
+        let mut g = Game::new(7);
+        g.board = board_from(&[(CENTER, ANCHOR)]);
+        g.place_bubble(500, 2);
+        assert!(g.take_sfx().contains(&8), "hit");
+
+        // the five-bounce give-up
+        let mut g = Game::new(7);
+        g.gun.a = A_MIN;
+        g.step(&fired());
+        let mut heard = Vec::new();
+        for _ in 0..400 {
+            g.step(&still());
+            heard.extend(g.take_sfx());
+        }
+        assert!(heard.contains(&19), "missed completely: {heard:?}");
+
+        // the mass's return shot
+        let mut g = Game::new(7);
+        for _ in 0..4 {
+            g.update_tries();
+        }
+        let mut heard = Vec::new();
+        for _ in 0..200 {
+            g.step(&still());
+            heard.extend(g.take_sfx());
+        }
+        assert!(heard.contains(&21), "rebuttal: {heard:?}");
+    }
+
+    #[test]
+    fn the_music_calls_are_the_carts() {
+        // A new game starts the round theme.
+        let mut g = Game::new(7);
+        assert!(g.take_music().contains(&16), "round music");
+
+        // Clearing the board plays the clear jingle.
+        let mut g = Game::new(7);
+        g.col_pool.clear();
+        g.step(&still());
+        assert!(g.take_music().contains(&34), "round clear");
+
+        // And the wall ends it.
+        let mut g = Game::new(7);
+        g.board = board_from(&[(CENTER, ANCHOR), (270, 3)]);
+        g.check_over();
+        assert!(g.take_music().contains(&32), "game over");
+    }
+
+    #[test]
+    fn a_drain_takes_everything_once() {
+        let mut g = Game::new(7);
+        g.step(&fired());
+        assert!(!g.take_sfx().is_empty());
+        assert!(g.take_sfx().is_empty(), "a second drain finds nothing");
     }
 }

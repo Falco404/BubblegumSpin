@@ -4,6 +4,7 @@
 //! never touches a screen; `main.rs` is the only place that talks to the window
 //! and the audio device.
 
+pub mod audio;
 pub mod board;
 pub mod consts;
 pub mod fixed;

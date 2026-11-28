@@ -9,6 +9,8 @@ Everything is plain `cargo`; there are no scripts and no environment variables.
 * Windows: nothing else.
 * Linux: `libasound2-dev libx11-dev libxi-dev libgl1-mesa-dev libudev-dev
   pkg-config` (already in the project container).
+* Background music is **off by default** (see the sources for why). `BGS_MUSIC=1 cargo run`
+  on Linux/macOS, or `$env:BGS_MUSIC="1"; cargo run` in PowerShell, turns it back on.
 * Debian/WSL with no display: `cargo test` and `cargo run --bin shot` still work,
   because the framebuffer is software. Only `cargo run` needs a screen.
 
@@ -16,7 +18,7 @@ Everything is plain `cargo`; there are no scripts and no environment variables.
 
 | What | Command | Output |
 |---|---|---|
-| Window (4x scale, 512x512) | `cargo run` | the board scene |
+| Window (4x scale, 512x512) | `cargo run` | the board scene, with effects |
 | Headless screenshot | `cargo run --bin shot` | `out/m1.png` (128x128 RGB) |
 | Board scene screenshot | `cargo run --bin shot -- --scene game --out out/game.png` | one frame |
 | ... rotated a quarter turn | `cargo run --bin shot -- --scene game --spin 0.25 --out out/spin.png` | one frame |
@@ -26,7 +28,9 @@ Everything is plain `cargo`; there are no scripts and no environment variables.
 | Level as ASCII | `cargo run --bin board_dump` | 25 rows of `.` `W` `8` `9` |
 | Golden frames | `cargo test --test screens` | byte-compares 5 frames with `tests/golden/` |
 | Re-record goldens | `UPDATE_GOLDENS=1 cargo test --test screens` | rewrites `tests/golden/*.png` after an intended visual change |
-| Re-extract the art | `python3 tools/p8_import.py` | `assets/sprites.bin`, `assets/map.bin` from the cart |
+| Re-extract the art | `python3 tools/p8_import.py` | `assets/{sprites,map,sfx,music}.bin` from the cart |
+| Hear one sound | `cargo run --bin wav_dump -- --sfx 18 --out out/fire.wav` | a WAV you can play |
+| Hear one track | `cargo run --bin wav_dump -- --music 16 --out out/round.wav` | ditto, the round theme |
 | Tests | `cargo test` | `test result: ok. ...` |
 | Lints / format | `cargo clippy --all-targets`, `cargo fmt --check` | no output = clean |
 | Release build | `cargo build --release` | `target/release/bubblegum-spin[.exe]` |
@@ -66,6 +70,13 @@ cargo run
 
 The debug spin key from M3 (`S` / space) is gone: the mass now spins because you
 hit it.
+
+## Audio
+
+The synth is in `src/audio`: it renders a sound effect or music track to samples and
+`to_wav` wraps them in 16-bit mono PCM, which `main.rs` hands to `macroquad` the first
+time the game asks for that id. No device is needed for any of it, so `cargo test` and
+`wav_dump` work headless.
 
 ## Save file
 
