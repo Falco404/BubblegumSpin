@@ -5,9 +5,17 @@ edition = "2021"
 description = "Native port of Bubblegum Spin by Bee_Randon (PICO-8)"
 license = "proprietary"
 
+# An explicit bin name: cargo-quad-apk's Java glue calls
+# `System.loadLibrary(<last package segment>)`, while the .so keeps the binary's own
+# name. Those two only agree with underscores, never a hyphen — the first APK loaded
+# `libbubblegumspin.so` against a `libbubblegum-spin.so` and died at launch.
+[[bin]]
+name = "bubblegum_spin"
+path = "src/main.rs"
+
 [package.metadata.android]
 # `cargo quad-apk` reads this block; see docs/RUNNING.md for the build.
-package_name = "com.falco.bubblegumspin"
+package_name = "com.falco.bubblegum_spin"
 label = "BubblegumSpin"
 version_code = 1
 version_name = "0.1.0"

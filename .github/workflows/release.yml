@@ -19,12 +19,12 @@ jobs:
         include:
           - os: ubuntu-latest
             artifact: bubblegum-spin-linux
-            bin: target/release/bubblegum-spin
+            bin: target/release/bubblegum_spin
             asset: bubblegum-spin-linux
             package: bubblegum-spin-linux.zip
           - os: windows-latest
             artifact: bubblegum-spin-windows
-            bin: target/release/bubblegum-spin.exe
+            bin: target/release/bubblegum_spin.exe
             asset: bubblegum-spin-windows
             package: bubblegum-spin-windows.zip
     runs-on: ${{ matrix.os }}
@@ -92,7 +92,7 @@ jobs:
       - name: Build the APK
         # `--bin`: the helper binaries (shot, board_dump, wav_dump) are desktop tools
         # and would otherwise each get an APK of their own.
-        run: cargo quad-apk build --release --bin bubblegum-spin
+        run: cargo quad-apk build --release --bin bubblegum_spin
       - uses: actions/upload-artifact@v4
         with:
           name: bubblegum-spin-android

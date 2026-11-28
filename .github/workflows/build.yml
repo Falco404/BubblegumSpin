@@ -60,7 +60,7 @@ jobs:
       - name: Build the APK
         # `--bin`: the helper binaries (shot, board_dump, wav_dump) are desktop tools
         # and would otherwise each get an APK of their own.
-        run: cargo quad-apk build --release --bin bubblegum-spin
+        run: cargo quad-apk build --release --bin bubblegum_spin
       - name: Show what was built
         run: |
           ls -l target/android-artifacts/release/apk/
@@ -70,6 +70,16 @@ jobs:
           # `aapt` used to expand to several versions and print its usage instead.
           "$tools/aapt2" dump badging "$apk" | head -6
           "$tools/apksigner" verify --print-certs "$apk" | head -4
+      - name: Check the library name matches what the Java loads
+        # cargo-quad-apk's glue calls `System.loadLibrary(<last package segment>)` while
+        # the .so keeps the binary's name; a hyphen in that name shipped an APK that died
+        # on launch with UnsatisfiedLinkError. Fail here instead of on a phone.
+        run: |
+          apk=$(ls target/android-artifacts/release/apk/*.apk | head -1)
+          lib=$(python3 -c 'import sys,zipfile; z=zipfile.ZipFile(sys.argv[1]); print([n for n in z.namelist() if n.endswith(".so")][0].split("/")[-1])' "$apk")
+          want="lib$(grep -m1 '^package_name' Cargo.toml | cut -d'"' -f2 | awk -F. '{print $NF}').so"
+          echo "APK ships $lib; the Java loads $want"
+          test "$lib" = "$want" || { echo "the .so name and System.loadLibrary disagree"; exit 1; }
       - uses: actions/upload-artifact@v4
         with:
           name: bubblegum-spin-android
@@ -83,10 +93,10 @@ jobs:
         include:
           - os: ubuntu-latest
             artifact: bubblegum-spin-linux
-            bin: target/release/bubblegum-spin
+            bin: target/release/bubblegum_spin
           - os: windows-latest
             artifact: bubblegum-spin-windows
-            bin: target/release/bubblegum-spin.exe
+            bin: target/release/bubblegum_spin.exe
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
