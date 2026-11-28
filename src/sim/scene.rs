@@ -8,8 +8,8 @@
 //! already lives — [`Game::t`] — and the machine advances it for the scenes that are
 //! not the game. Same for the fade, which wraps every screen.
 
-use crate::fixed::{mul, Fix, HALF, ONE};
-use crate::p8math::bezier;
+use crate::fixed::{int, mul, Fix, HALF, ONE};
+use crate::p8math::{bezier, sin};
 use crate::sim::spin::Zoom;
 use crate::sim::{Game, Input};
 
@@ -139,6 +139,18 @@ impl Coin {
     }
 }
 
+/// A gumball arcing from the machine to the kid on the score screen.
+///
+/// The cart reuses `bubs` for this, with a curve/frac/pos triple; keeping them apart
+/// means the game's bubbles never have to carry animation fields they do not use.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ScoreBub {
+    pub curve: [(Fix, Fix); 3],
+    pub frac: Fix,
+    pub pos: (Fix, Fix),
+    pub col: u16,
+}
+
 /// Everything the cart keeps outside the board: the machine, its menus and the
 /// effects' shared fields (`reset_scene`).
 #[derive(Debug)]
@@ -168,9 +180,14 @@ pub struct App {
     pub rumble_t: i32,
 
     /// cart `blow_r`/`blow_force`/`blowing`: the gum bubble the kid blows.
-    pub blow_r: i32,
+    pub blow_r: Fix,
+    pub blow_x: Fix,
     pub blow_force: i32,
     pub blowing: bool,
+    /// Gumballs the machine spits out on the score screen (cart reuses `bubs`).
+    pub score_bubs: Vec<ScoreBub>,
+    /// The menu entry picked on the score screen, run once its fade-out finishes.
+    pending: Option<NavEntry>,
 
     fire: Btnp,
     up: Btnp,
@@ -201,9 +218,12 @@ impl App {
             gumballs: 0,
             coin: None,
             rumble_t: 0,
-            blow_r: 2,
+            blow_r: int(2),
+            blow_x: int(68),
             blow_force: 0,
             blowing: false,
+            score_bubs: Vec::new(),
+            pending: None,
             fire: Btnp::default(),
             up: Btnp::default(),
             down: Btnp::default(),
@@ -255,9 +275,12 @@ impl App {
         self.rumble = false;
         self.event_t = 0;
         self.gumballs = 0;
-        self.blow_r = 2;
+        self.blow_r = int(2);
+        self.blow_x = int(68);
         self.blow_force = 0;
         self.blowing = false;
+        self.score_bubs.clear();
+        self.pending = None;
     }
 
     /// Run the entry the menu is on (the cart's `nav[focus]` function pointers).
@@ -418,30 +441,126 @@ impl App {
         }
     }
 
-    /// cart `init_final()` and `update_final()`. The dispense/chew/blow animation is
-    /// m8.3; the menu already works.
+    /// cart `init_final()` and `update_final()`: the machine dispenses one gumball per
+    /// 100 points, the kid chews, blows a bubble, and then the menu appears.
     fn step_final(&mut self, fire: bool, up: bool, down: bool) {
         self.tick();
+        self.update_blow();
+
         if !self.game.fade.faded {
-            return;
-        }
-        if self.finalani < 4 {
             self.event_t += 1;
             return;
         }
-        if fire {
-            let entry = self.nav[self.focus - 1];
-            self.game.save.completed = true;
-            self.activate(entry);
+
+        match self.finalani {
+            1 => {
+                if self.game.score == 0 {
+                    // Nothing to show: straight to the menu.
+                    self.finalani = 4;
+                    return;
+                }
+                self.rumble = true;
+                self.hero = Hero::Nom;
+                self.dispense();
+                self.update_score_bubs();
+                if self.score_bubs.is_empty() {
+                    self.finalani = 2;
+                    self.event_t = 0;
+                }
+            }
+            2 => {
+                self.rumble = false;
+                self.hero = Hero::Chew;
+                if self.event_t > 120 {
+                    self.finalani = 3;
+                    self.event_t = 0;
+                }
+            }
+            3 => {
+                self.hero = Hero::Blow;
+                self.blow_bubble();
+            }
+            _ => {
+                // The fade-out that follows a choice finally lands here.
+                if self.game.fade.value >= ONE && self.game.fade.faded {
+                    if let Some(entry) = self.pending.take() {
+                        self.activate(entry);
+                        return;
+                    }
+                }
+                if fire {
+                    let entry = self.nav[self.focus - 1];
+                    // cart `init_fadeout()` then `_init=nav[focus].init`: the switch
+                    // waits for the screen to go black, and `completed` is saved.
+                    self.game.fade.start_out();
+                    self.game.save.completed = true;
+                    self.pending = Some(entry);
+                }
+                if up {
+                    self.focus -= 1;
+                }
+                if down {
+                    self.focus += 1;
+                }
+                self.focus = self.focus.clamp(1, self.nav.len());
+            }
+        }
+        self.event_t += 1;
+    }
+
+    /// cart `dispense()`: one gumball leaves the machine, on a bezier to the kid.
+    fn dispense(&mut self) {
+        if self.gumballs <= 0 {
             return;
         }
-        if up {
-            self.focus -= 1;
+        self.gumballs -= 1;
+        let (mx, my) = (int(46), int(99));
+        let curve = [
+            (mx + int(2), my + int(13)),
+            (
+                mx + self.game.rng.rnd_fix(int(32)),
+                self.game.rng.rnd_fix(int(96)) - int(96),
+            ),
+            (int(68), int(19) + int(120) - int(18) * 2),
+        ];
+        let col = self.game.rnd_col();
+        self.score_bubs.push(ScoreBub {
+            curve,
+            frac: 0,
+            pos: bezier(&curve, 0),
+            col,
+        });
+    }
+
+    /// cart `update_bub_ani()`: the dispensed gumballs follow their curves and go.
+    fn update_score_bubs(&mut self) {
+        for bub in &mut self.score_bubs {
+            bub.frac = (bub.frac + COIN_STEP) % ONE;
+            bub.pos = bezier(&bub.curve, bub.frac);
         }
-        if down {
-            self.focus += 1;
+        self.score_bubs.retain(|bub| bub.frac <= COIN_LANDED);
+    }
+
+    /// cart `update_blow()`: the bubble wobbles once it is wide enough.
+    fn update_blow(&mut self) {
+        self.blow_x = int(68);
+        if self.blow_r > int(10) {
+            self.blow_x += mul(
+                sin(int(self.game.t) / 200),
+                crate::fixed::div(self.blow_r, int(10)),
+            );
         }
-        self.focus = self.focus.clamp(1, self.nav.len());
+    }
+
+    /// cart `blow_bubble()`: the bubble grows one step per frame, then the menu opens.
+    fn blow_bubble(&mut self) {
+        self.blowing = true;
+        if self.blow_force > 0 {
+            self.blow_force -= 1;
+            self.blow_r += 13_107; // 0.2, quantised
+        } else {
+            self.finalani = 4;
+        }
     }
 
     /// cart `init_retry()`: no fade at all (`fade=0; faded=true`), a fresh game and
@@ -707,5 +826,138 @@ mod tests {
             "the score track is queued"
         );
         assert!(app.gumballs >= 0);
+    }
+
+    /// Drop the app on the score screen with a given score, without playing for it.
+    fn to_final(app: &mut App, score: i32) {
+        app.game.new_game();
+        app.game.score = score;
+        app.game.fade.finish_in();
+        app.scene = Scene::Final;
+        app.nav = &FINAL_NAV;
+        app.focus = 1;
+        app.finalani = 1;
+        app.gumballs = score / 100;
+        app.blow_force = app.gumballs;
+    }
+
+    #[test]
+    fn a_zero_score_goes_straight_to_the_menu() {
+        let mut app = App::new(7);
+        to_final(&mut app, 0);
+        app.step(&still());
+        assert_eq!(app.finalani, 4, "nothing to dispense, so no animation");
+        assert!(app.score_bubs.is_empty());
+    }
+
+    #[test]
+    fn the_machine_dispenses_one_gumball_per_hundred_points() {
+        let mut app = App::new(7);
+        to_final(&mut app, 500);
+        for _ in 0..5 {
+            app.step(&still());
+        }
+        assert_eq!(app.gumballs, 0, "five gumballs for 500 points");
+        assert_eq!(app.score_bubs.len(), 5);
+        assert_eq!(app.hero, Hero::Nom);
+        assert!(app.rumble);
+
+        for _ in 0..200 {
+            if app.finalani == 2 {
+                break;
+            }
+            app.step(&still());
+        }
+        assert_eq!(app.finalani, 2, "the arcs finish and the kid chews");
+        assert!(app.score_bubs.is_empty());
+    }
+
+    #[test]
+    fn the_kid_chews_for_120_frames_then_blows_the_bubble() {
+        let mut app = App::new(7);
+        to_final(&mut app, 100);
+        for _ in 0..300 {
+            if app.finalani == 2 {
+                break;
+            }
+            app.step(&still());
+        }
+        assert_eq!(app.finalani, 2);
+        app.step(&still());
+        assert_eq!(app.hero, Hero::Chew, "the next frame switches the pose");
+        let mut chewed = 0;
+        while app.finalani == 2 {
+            app.step(&still());
+            chewed += 1;
+            assert!(chewed < 200);
+        }
+        // `event_t` is already 1 on the frame the state changed, so 120 more
+        // frames pass before the cart's `event_t > 120` fires.
+        assert_eq!(chewed, 120);
+        assert_eq!(app.finalani, 3);
+    }
+
+    #[test]
+    fn the_blown_bubble_grows_once_per_punishment_then_the_menu_opens() {
+        let mut app = App::new(7);
+        to_final(&mut app, 300);
+        app.finalani = 3;
+        let before = app.blow_r;
+        app.step(&still());
+        assert_eq!(app.blow_r, before + 13_107);
+        assert!(app.blowing);
+        let mut frames = 0;
+        while app.finalani == 3 {
+            app.step(&still());
+            frames += 1;
+            assert!(frames < 10);
+        }
+        assert_eq!(app.finalani, 4, "and then the score menu appears");
+        assert_eq!(app.blow_force, 0);
+    }
+
+    #[test]
+    fn retry_fades_the_score_screen_out_then_deals_a_fresh_game() {
+        let mut app = App::new(7);
+        to_final(&mut app, 0);
+        app.step(&still());
+        assert_eq!(app.finalani, 4);
+
+        tap(&mut app, pressed());
+        assert_eq!(app.game.fade.state, crate::sim::spin::FadeState::Out);
+        let mut frames = 0;
+        while app.scene == Scene::Final {
+            app.step(&still());
+            frames += 1;
+            assert!(frames < 200, "the fade-out never finished");
+        }
+        assert_eq!(app.scene, Scene::Game);
+        assert_eq!(app.game.board.0.len(), 61, "a fresh board");
+        assert_eq!(app.game.score, 0);
+        assert!(
+            app.game.save.completed,
+            "the score screen marks the cart done"
+        );
+    }
+
+    #[test]
+    fn return_to_title_fades_out_and_rebuilds_the_title_screen() {
+        let mut app = App::new(7);
+        to_final(&mut app, 0);
+        app.step(&still());
+        tap(&mut app, down());
+        assert_eq!(app.focus, 2);
+        app.game.take_music();
+        tap(&mut app, pressed());
+        let mut frames = 0;
+        while app.scene == Scene::Final {
+            app.step(&still());
+            frames += 1;
+            assert!(frames < 200);
+        }
+        assert_eq!(app.scene, Scene::Main);
+        assert_eq!(app.nav, &MAIN_NAV[..]);
+        assert_eq!(app.focus, 1);
+        assert!(app.game.take_music().contains(&0), "the title track again");
     }
 }
