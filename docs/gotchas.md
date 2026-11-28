@@ -26,11 +26,9 @@
 - Cell values are `u16` (`colour + 10*pop + 300*explode`, ~609): delete at `v > 600`,
   settled is `v < 10`, `keys()` skips `v >= 10` and the centre 262.
 - `get_dest_cell` can be `nil` (the cart would index the board with it); we give the shot up.
-- `neighbors()` wraps the last column into the next row and never bounds `y` upward —
-  the cart's own quirks, and both change which gumballs fall.
+- `neighbors()` wraps the last column into the next row and never bounds `y` upward — both change which gumballs fall.
 - Layout: `b2px(i) = (x*8-16 (+4 odd rows), y*7-20)`, `B_R = 4`, centre 262 at (64,64); `src/consts.rs` comes from `tools/extract_level.py`.
-- `check_over` **ceils** the rotated position, so centres live in `[8,121]`: 122 ends the
-  game (the M5 issue's "124" is wrong).
+- `check_over` **ceils** the rotated position, so centres live in `[8,121]`; 122 ends the game (the M5 issue's "124" is wrong).
 - `f_bubs = bubs` on game over joins the loaded bubble to the cascade; `drop_bubs` divides
   by `flr(rnd(#f_bubs/20))`, which is 0 under 20 bubbles — guard it.
 
@@ -70,10 +68,13 @@
 
 ## Android
 
+- **The bin, the `.so` and `package_name`'s last segment must be one word.** cargo-quad-apk's Java
+  loads the package segment's last dot-part while the APK carries `lib<bin>.so`, so a hyphen in
+  either name ships an APK that dies at launch with `UnsatisfiedLinkError`; CI compares the two.
 - `cargo quad-apk` 0.1.4 cannot read a `Cargo.lock` v4, shells out to the `dx` that build-tools 31+
   removed, and wants JDK 8's `rt.jar`; CI pins master by rev. The runner's NDK r27 ships only
-  `llvm-*`, so `ar`/`ld`/`readelf` are symlinked and `-lunwind` comes from clang's dir. The APK is
-  arm64, debug-signed: a reinstall needs an uninstall first.
+  `llvm-*`, so `ar`/`ld`/`readelf` are symlinked and `-lunwind` comes from clang's dir.
+- The APK is arm64 and debug-signed: a reinstall needs an uninstall first, and a new app id is a new app.
 
 ## Tooling and the repo
 
