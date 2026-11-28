@@ -213,9 +213,6 @@ fn pad_lean(x: f32, y: f32, cx: f32, cy: f32) -> (f32, f32) {
 fn draw_controls(strip: &Strip) {
     let dim = Color::new(1.0, 1.0, 1.0, 0.18);
     let ink = Color::new(1.0, 1.0, 1.0, 0.65);
-    let size = strip.side();
-    let font = size * 0.4;
-
     let (px, py, side) = strip.pad();
     draw_rectangle(px, py, side, side, dim);
     let (cx, cy) = (px + side / 2.0, py + side / 2.0);
@@ -254,6 +251,8 @@ fn draw_controls(strip: &Strip) {
     }
 
     let (peek, fire) = strip.action_buttons();
+    let size = strip.button_side();
+    let font = size * 0.5;
     for (x, y, label) in [(peek.0, peek.1, "O"), (fire.0, fire.1, "X")] {
         draw_rectangle(x, y, size, size, dim);
         let metrics = measure_text(label, None, font as u16, 1.0);
@@ -336,6 +335,12 @@ async fn main() {
         }
         // Fixed step, capped so a stall does not replay hundreds of frames.
         accumulator += get_frame_time().min(0.25);
+        // The phone's back button: out of the current screen, and off the app from the
+        // title. miniquad's Java glue swallows every key, so nothing happens unless the
+        // port acts on it.
+        if is_key_pressed(KeyCode::Back) && app.back() {
+            std::process::exit(0);
+        }
         let input = read_input(&layout);
         while accumulator >= STEP {
             app.step(&input);

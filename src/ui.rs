@@ -69,29 +69,35 @@ pub struct Strip {
 }
 
 impl Strip {
-    /// One button's side, in pixels.
+    /// The d-pad's side, in pixels.
     ///
-    /// The strip is much taller than a thumb-friendly square on a portrait phone, so
-    /// the buttons are squares limited by a fifth of the width, centred in the band.
-    pub fn side(&self) -> f32 {
-        (self.height.min(self.width * 0.2)).max(64.0)
+    /// It is the thumb's main control, so it takes most of the strip's height and up to
+    /// 42% of the width — twice the square the first phone build used.
+    pub fn pad_side(&self) -> f32 {
+        (self.height * 0.92).min(self.width * 0.42).max(64.0)
     }
 
-    /// The top of the button row, centred in the strip.
-    pub fn row(&self) -> f32 {
-        self.top + (self.height - self.side()) / 2.0
+    /// One action button's side: smaller than the pad, still comfortable.
+    pub fn button_side(&self) -> f32 {
+        (self.height * 0.62).min(self.width * 0.27).max(48.0)
+    }
+
+    /// The top of the pad, centred in the strip.
+    pub fn pad_row(&self) -> f32 {
+        self.top + ((self.height - self.pad_side()) / 2.0).max(0.0)
+    }
+
+    /// The top of the action buttons, centred separately — they are shorter.
+    pub fn button_row(&self) -> f32 {
+        self.top + ((self.height - self.button_side()) / 2.0).max(0.0)
     }
 
     /// Which button a point in the strip hits, if any.
     pub fn button_at(&self, x: f32, y: f32) -> Option<Button> {
-        let side = self.side();
-        let top = self.row();
-        if y < top || y >= top + side {
-            return None;
-        }
         // The pad: a square in the left corner, four ways by the longer axis.
-        if x < side {
-            let (dx, dy) = (x - side / 2.0, y - (top + side / 2.0));
+        let pad = self.pad_side();
+        if x < pad && y >= self.pad_row() && y < self.pad_row() + pad {
+            let (dx, dy) = (x - pad / 2.0, y - (self.pad_row() + pad / 2.0));
             return Some(if dx.abs() > dy.abs() {
                 if dx < 0.0 {
                     Button::Left
@@ -105,6 +111,11 @@ impl Strip {
             });
         }
         // Then `O` and `X`, right-aligned.
+        let side = self.button_side();
+        let top = self.button_row();
+        if y < top || y >= top + side {
+            return None;
+        }
         if x >= self.width - side {
             return Some(Button::Fire);
         }
@@ -116,13 +127,13 @@ impl Strip {
 
     /// The pad's square, for drawing: `(x, y, side)`.
     pub fn pad(&self) -> (f32, f32, f32) {
-        (0.0, self.row(), self.side())
+        (0.0, self.pad_row(), self.pad_side())
     }
 
     /// Where to draw `O` and `X`: `(x, y, side)` each, right-aligned.
     pub fn action_buttons(&self) -> ((f32, f32, f32), (f32, f32, f32)) {
-        let side = self.side();
-        let top = self.row();
+        let side = self.button_side();
+        let top = self.button_row();
         let peek = (self.width - 2.0 * side, top, side);
         let fire = (self.width - side, top, side);
         (peek, fire)
@@ -164,7 +175,7 @@ impl Layout {
         let strip_height = if touch {
             // The cap is never below the floor, so a short window cannot cross them.
             let cap = (height * 0.45).max(96.0);
-            (height * 0.22).clamp(96.0, cap)
+            (height * 0.28).clamp(96.0, cap)
         } else {
             0.0
         };
@@ -261,21 +272,54 @@ mod tests {
     fn the_picture_sits_above_the_strip_at_a_whole_pixel_scale() {
         let layout = phone();
         let strip = layout.strip.expect("a phone has a control strip");
-        // 22% of 2400 is 528; the picture gets what is left and is an integer scale.
-        assert_eq!(strip.height, 528.0);
-        assert_eq!(strip.top, 1872.0);
+        // 28% of 2400 is 672; the picture gets what is left and is an integer scale.
+        assert_eq!(strip.height, 672.0);
+        assert_eq!(strip.top, 1728.0);
         assert_eq!(layout.picture.side, 1024.0, "8x, not 8.4x");
         assert_eq!(layout.picture.scale(), 8.0);
         assert_eq!(layout.picture.x, 28.0);
-        assert_eq!(layout.picture.y, 424.0);
+        assert_eq!(layout.picture.y, 352.0);
+    }
+
+    #[test]
+    fn the_pad_is_twice_the_size_it_used_to_be() {
+        // It was one square of `min(strip, width/5)` = 216 px on this screen; the
+        // thumb wanted twice that.
+        let strip = phone().strip.unwrap();
+        assert!(
+            strip.pad_side() >= 432.0,
+            "the pad is {} px, under 2x the old 216",
+            strip.pad_side()
+        );
+        assert!(
+            strip.pad_side() < 1080.0 * 0.45,
+            "but it leaves room to the right"
+        );
+        assert!(
+            strip.button_side() > 216.0,
+            "the action buttons grew too: {}",
+            strip.button_side()
+        );
+    }
+
+    #[test]
+    fn the_bigger_pad_does_not_reach_the_action_buttons() {
+        let strip = phone().strip.unwrap();
+        let (_, _, pad) = strip.pad();
+        let (peek, _fire) = strip.action_buttons();
+        assert!(
+            peek.0 >= pad,
+            "pad ends at {pad}, peek starts at {}",
+            peek.0
+        );
     }
 
     #[test]
     fn a_wide_window_leaves_side_bars_and_the_strip_stays_at_the_bottom() {
         let layout = Layout::for_screen(2400.0, 1080.0, true);
         let strip = layout.strip.unwrap();
-        assert_eq!(strip.height, 237.6);
-        assert_eq!(strip.top, 842.4);
+        assert_eq!(strip.height, 302.4);
+        assert_eq!(strip.top, 777.6);
         // The picture is limited by the height left over, not the width.
         assert_eq!(layout.picture.side, 768.0);
         assert_eq!(layout.picture.x, 816.0);
@@ -305,7 +349,7 @@ mod tests {
             Some(Button::Fire)
         );
         assert_eq!(
-            strip.button_at(1080.0 - 1.0, strip.row() + 10.0),
+            strip.button_at(1080.0 - 1.0, strip.button_row() + 10.0),
             Some(Button::Fire),
             "the fire button reaches the right edge"
         );
@@ -315,13 +359,15 @@ mod tests {
     fn the_gap_between_the_pad_and_the_buttons_is_dead() {
         let strip = phone().strip.unwrap();
         let (peek, _fire) = strip.action_buttons();
-        let (_, _, side) = strip.pad();
+        let (_, _, pad) = strip.pad();
+        // The gap between the pad and the first action button.
+        let gap = (pad + peek.0) / 2.0;
         assert_eq!(
-            strip.button_at(540.0, strip.row() + 10.0),
+            strip.button_at(gap, strip.button_row() + 10.0),
             None,
-            "the middle of the strip is dead"
+            "the gap at {gap} is dead"
         );
-        assert!(peek.0 >= side, "the buttons do not overlap the pad");
+        assert!(peek.0 > pad, "the buttons do not overlap the pad");
     }
 
     #[test]
