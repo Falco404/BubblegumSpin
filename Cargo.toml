@@ -29,6 +29,11 @@ fullscreen = true
 macroquad = { version = "0.4", features = ["audio"] }
 png = "0.17"
 
+[target.'cfg(target_os = "android")'.dependencies]
+# Already in the tree via miniquad; used only to put panics in logcat, where a phone
+# can show them — Android sends stderr to nowhere.
+ndk-sys = "0.2"
+
 [dev-dependencies]
 png = "0.17"
 

@@ -22,12 +22,19 @@ pub struct Picture {
 impl Picture {
     /// Screen pixels per game pixel (an integer, by construction).
     pub fn scale(&self) -> f32 {
-        self.side / GAME
+        if self.side > 0.0 {
+            self.side / GAME
+        } else {
+            0.0
+        }
     }
 
     /// A screen point in 128x128 game coordinates, or `None` outside the picture.
     pub fn to_game(&self, x: f32, y: f32) -> Option<(f32, f32)> {
         let scale = self.scale();
+        if scale <= 0.0 {
+            return None;
+        }
         let (gx, gy) = ((x - self.x) / scale, (y - self.y) / scale);
         if (0.0..GAME).contains(&gx) && (0.0..GAME).contains(&gy) {
             Some((gx, gy))
@@ -142,8 +149,22 @@ impl Layout {
     /// The picture keeps a whole-number scale so its pixels stay square: on a 1080-wide
     /// phone that is 8x (1024 px) with 28 px bars, not 8.4x.
     pub fn for_screen(width: f32, height: f32, touch: bool) -> Self {
+        // Android reports a 0x0 surface until its window exists, and `f32::clamp`
+        // panics when the bounds cross — that was the crash on the phone's first frame.
+        if !(width > 0.0 && height > 0.0) {
+            return Self {
+                picture: Picture {
+                    x: 0.0,
+                    y: 0.0,
+                    side: 0.0,
+                },
+                strip: None,
+            };
+        }
         let strip_height = if touch {
-            (height * 0.22).clamp(96.0, height * 0.45)
+            // The cap is never below the floor, so a short window cannot cross them.
+            let cap = (height * 0.45).max(96.0);
+            (height * 0.22).clamp(96.0, cap)
         } else {
             0.0
         };
@@ -151,14 +172,14 @@ impl Layout {
         let scale = (width.min(usable) / GAME).floor().max(1.0);
         let side = scale * GAME;
         let picture = Picture {
-            x: ((width - side) / 2.0).floor(),
-            y: ((usable - side) / 2.0).floor(),
+            x: ((width - side) / 2.0).max(0.0).floor(),
+            y: ((usable - side) / 2.0).max(0.0).floor(),
             side,
         };
         let strip = if touch {
             Some(Strip {
                 width,
-                top: usable,
+                top: usable.max(0.0),
                 height: strip_height,
             })
         } else {
@@ -195,6 +216,29 @@ mod tests {
     /// A phone in portrait: 1080x2400, the shape the layout has to survive.
     fn phone() -> Layout {
         Layout::for_screen(1080.0, 2400.0, true)
+    }
+
+    #[test]
+    fn a_zero_sized_surface_is_an_empty_layout_not_a_panic() {
+        // Android reports 0x0 until its surface exists, and `f32::clamp(96.0, 0.0)`
+        // panics when the bounds cross: this was the crash on the phone's first frame.
+        let layout = Layout::for_screen(0.0, 0.0, true);
+        assert_eq!(layout.picture.side, 0.0);
+        assert!(layout.strip.is_none());
+        assert_eq!(layout.picture.to_game(0.0, 0.0), None);
+        assert_eq!(layout.input(&[(0.0, 0.0)]), Input::default());
+        assert_eq!(Layout::for_screen(1080.0, 0.0, true).picture.side, 0.0);
+        assert_eq!(Layout::for_screen(0.0, 2400.0, true).picture.side, 0.0);
+    }
+
+    #[test]
+    fn a_tiny_screen_still_gives_a_strip_inside_it() {
+        // A size reported mid-rotation must not put the strip or the picture off-screen.
+        let layout = Layout::for_screen(200.0, 100.0, true);
+        let strip = layout.strip.expect("still a phone layout");
+        assert!(strip.height <= 100.0, "strip {} > screen", strip.height);
+        assert!(strip.top >= 0.0);
+        assert!(layout.picture.y >= 0.0);
     }
 
     #[test]

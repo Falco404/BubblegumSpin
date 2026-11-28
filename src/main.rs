@@ -114,6 +114,42 @@ impl Audio {
     }
 }
 
+/// Say something once: to stderr, and on Android to logcat, which is the only place a
+/// phone can show it (a native app's stderr goes nowhere).
+fn say(message: &str) {
+    eprintln!("{message}");
+    #[cfg(target_os = "android")]
+    android_log::line("bubblegum-spin", message);
+}
+
+/// logcat plumbing. The phone reports "the app has a bug and stopped" with no detail,
+/// so panics and the startup facts have to be written where `adb logcat` can see them.
+#[cfg(target_os = "android")]
+mod android_log {
+    use std::ffi::CString;
+
+    /// 4 is `ANDROID_LOG_INFO`.
+    const INFO: i32 = 4;
+
+    pub fn line(tag: &str, message: &str) {
+        let (Ok(tag), Ok(message)) = (CString::new(tag), CString::new(message)) else {
+            return;
+        };
+        // Safety: both pointers are valid NUL-terminated strings for the call.
+        unsafe { ndk_sys::__android_log_write(INFO, tag.as_ptr(), message.as_ptr()) };
+    }
+
+    /// A Rust panic aborts the process on Android with no visible output; this puts the
+    /// message and the source location in logcat before the default hook runs.
+    pub fn install_panic_hook() {
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            line("bubblegum-spin", &format!("PANIC {info}"));
+            previous(info);
+        }));
+    }
+}
+
 /// PICO-8's `_update60`: one simulation step per 1/60 s.
 const STEP: f32 = 1.0 / 60.0;
 /// Default window size: 4x the 128x128 screen.
@@ -238,9 +274,15 @@ async fn main() {
     // without a debugger, and it is one line in a console nobody reads otherwise.
     let save_path = Save::default_path();
     let save = save_path.as_deref().map(Save::load).unwrap_or_default();
+    #[cfg(target_os = "android")]
+    android_log::install_panic_hook();
     match save_path.as_deref() {
-        Some(path) => eprintln!("save: {} (hiscore {})", path.display(), save.hiscore),
-        None => eprintln!("save: none — the hiscore will not persist"),
+        Some(path) => say(&format!(
+            "save: {} (hiscore {})",
+            path.display(),
+            save.hiscore
+        )),
+        None => say("save: none — the hiscore will not persist"),
     }
     // PICO-8 seeds its own generator; the port takes a fresh seed per run so the
     // board is not identical every game. `Rng::new` maps 0 to a constant.
@@ -252,7 +294,7 @@ async fn main() {
     let mut audio = Audio::new();
     if !audio.music_on {
         // One line, once, so it is obvious why there is no theme.
-        eprintln!("audio: music off (set BGS_MUSIC=1 to hear it); effects on");
+        say("audio: music off (set BGS_MUSIC=1 to hear it); effects on");
     }
     let mut fb = Fb::new();
     // cart `_draw`: the fade is applied to the palette, then the scene draws.
@@ -274,10 +316,24 @@ async fn main() {
     let touch = cfg!(target_os = "android") || std::env::var_os("BGS_TOUCH").is_some();
 
     let mut accumulator = 0.0f32;
+    let mut reported_surface = false;
     loop {
         // Recomputed every frame: the window can be resized, and on a phone the
         // notches and the rotation can change `screen_width()` at runtime.
         let layout = Layout::for_screen(screen_width(), screen_height(), touch);
+        if !reported_surface && screen_width() > 0.0 && screen_height() > 0.0 {
+            reported_surface = true;
+            say(&format!(
+                "surface: {}x{}, picture {}x{} at ({}, {}), controls {}",
+                screen_width(),
+                screen_height(),
+                layout.picture.side,
+                layout.picture.side,
+                layout.picture.x,
+                layout.picture.y,
+                if layout.strip.is_some() { "on" } else { "off" },
+            ));
+        }
         // Fixed step, capped so a stall does not replay hundreds of frames.
         accumulator += get_frame_time().min(0.25);
         let input = read_input(&layout);
