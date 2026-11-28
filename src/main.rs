@@ -143,9 +143,15 @@ fn read_input() -> Input {
 
 #[macroquad::main(window_conf)]
 async fn main() {
-    // cart `_init()`: the hiscore lives beside the executable.
+    // cart `_init()`: the hiscore lives beside the executable, or under `$HOME` on a
+    // phone. Say where it went once — it is the only way to check this on a device
+    // without a debugger, and it is one line in a console nobody reads otherwise.
     let save_path = Save::default_path();
     let save = save_path.as_deref().map(Save::load).unwrap_or_default();
+    match save_path.as_deref() {
+        Some(path) => eprintln!("save: {} (hiscore {})", path.display(), save.hiscore),
+        None => eprintln!("save: none — the hiscore will not persist"),
+    }
     // PICO-8 seeds its own generator; the port takes a fresh seed per run so the
     // board is not identical every game. `Rng::new` maps 0 to a constant.
     let seed = std::time::SystemTime::now()
