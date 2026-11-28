@@ -68,13 +68,13 @@
 
 ## Android
 
-- **The bin, the `.so` and `package_name`'s last segment must be one word.** cargo-quad-apk's Java
-  loads the package segment's last dot-part while the APK carries `lib<bin>.so`, so a hyphen in
-  either name ships an APK that dies at launch with `UnsatisfiedLinkError`; CI compares the two.
+- **The bin, the `.so` and `package_name`'s last segment must be one word.** cargo-quad-apk loads the
+  package's last dot-part while the APK carries `lib<bin>.so`, so a hyphen ships an APK that dies at
+  launch with `UnsatisfiedLinkError`; CI compares the two.
 - `cargo quad-apk` 0.1.4 cannot read a `Cargo.lock` v4, shells out to the `dx` that build-tools 31+
   removed, and wants JDK 8's `rt.jar`; CI pins master by rev. The runner's NDK r27 ships only
   `llvm-*`, so `ar`/`ld`/`readelf` are symlinked and `-lunwind` comes from clang's dir.
-- The APK is arm64 and debug-signed: a reinstall needs an uninstall first, and a new app id is a new app.
+- The APK is arm64 and debug-signed: a reinstall needs an uninstall first.
 
 ## Tooling and the repo
 
