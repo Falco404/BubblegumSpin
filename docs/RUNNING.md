@@ -9,6 +9,8 @@ Everything is plain `cargo`; there are no scripts and no environment variables.
 * Windows: nothing else.
 * Linux: `libasound2-dev libx11-dev libxi-dev libgl1-mesa-dev libudev-dev
   pkg-config` (already in the project container).
+* Background music is **off by default** (see the sources for why). `BGS_MUSIC=1 cargo run`
+  on Linux/macOS, or `$env:BGS_MUSIC="1"; cargo run` in PowerShell, turns it back on.
 * Debian/WSL with no display: `cargo test` and `cargo run --bin shot` still work,
   because the framebuffer is software. Only `cargo run` needs a screen.
 
@@ -16,7 +18,7 @@ Everything is plain `cargo`; there are no scripts and no environment variables.
 
 | What | Command | Output |
 |---|---|---|
-| Window (4x scale, 512x512) | `cargo run` | the board scene |
+| Window (4x scale, 512x512) | `cargo run` | the board scene, with effects |
 | Headless screenshot | `cargo run --bin shot` | `out/m1.png` (128x128 RGB) |
 | Board scene screenshot | `cargo run --bin shot -- --scene game --out out/game.png` | one frame |
 | ... rotated a quarter turn | `cargo run --bin shot -- --scene game --spin 0.25 --out out/spin.png` | one frame |

@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 
-use bubblegum_spin::audio::{render_music, render_sfx, to_wav, Sfx, SAMPLE_RATE};
+use bubblegum_spin::audio::{music_enabled, render_music, render_sfx, to_wav, Sfx, SAMPLE_RATE};
 use bubblegum_spin::gfx::{fb::Fb, scenes::draw_game};
 use bubblegum_spin::save::Save;
 use bubblegum_spin::sim::{Game, Input};
@@ -22,6 +22,9 @@ struct Audio {
     sfx: HashMap<u8, Sound>,
     music: HashMap<u8, Sound>,
     playing_music: Option<u8>,
+    /// Background music ships off: the tracks still do not sound like the cart, and
+    /// the effects are confirmed. `BGS_MUSIC=1` turns it back on.
+    music_on: bool,
 }
 
 impl Audio {
@@ -30,6 +33,7 @@ impl Audio {
             sfx: HashMap::new(),
             music: HashMap::new(),
             playing_music: None,
+            music_on: music_enabled(),
         }
     }
 
@@ -82,8 +86,10 @@ impl Audio {
                 );
             }
         }
+        // The queue is drained either way, so the simulation behaves exactly as the
+        // cart's does whether or not the tracks are audible.
         for id in game.take_music() {
-            if self.playing_music == Some(id) {
+            if !self.music_on || self.playing_music == Some(id) {
                 continue;
             }
             if let Some(current) = self.playing_music {
@@ -144,6 +150,10 @@ async fn main() {
         .unwrap_or(1);
     let mut game = Game::new_with_save(seed, save, save_path);
     let mut audio = Audio::new();
+    if !audio.music_on {
+        // One line, once, so it is obvious why there is no theme.
+        eprintln!("audio: music off (set BGS_MUSIC=1 to hear it); effects on");
+    }
     let mut fb = Fb::new();
     draw_game(&mut fb, &game);
 

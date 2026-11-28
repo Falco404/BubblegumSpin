@@ -280,6 +280,20 @@ fn anti_click(samples: &mut [f32], sample_rate: u32) {
     }
 }
 
+/// Whether the port plays background music at all.
+///
+/// The music is **off by default**: the synth gets the notes, timing and volumes right
+/// but the tracks still do not sound like the cart, and effects-only ships clean. Set
+/// `BGS_MUSIC=1` to hear the music while it is being fixed — nothing else changes.
+pub fn music_enabled() -> bool {
+    music_enabled_from(std::env::var("BGS_MUSIC").ok().as_deref())
+}
+
+/// The rule behind [`music_enabled`], split out so it can be tested.
+pub fn music_enabled_from(value: Option<&str>) -> bool {
+    matches!(value, Some("1"))
+}
+
 /// The four channel sfx ids of one music pattern.
 pub fn pattern(id: u8) -> [u8; CHANNELS] {
     let base = id as usize * CHANNELS;
@@ -423,6 +437,16 @@ mod tests {
             assert!(rms(&samples) > 0.2, "wave {wave} is too quiet");
             assert!(peak(&samples) <= 1.0, "wave {wave} peaks above 1.0");
         }
+    }
+
+    #[test]
+    fn music_is_off_unless_asked_for() {
+        // Effects-only by default; `BGS_MUSIC=1` is the only thing that turns music on.
+        assert!(!music_enabled_from(None));
+        assert!(!music_enabled_from(Some("0")));
+        assert!(!music_enabled_from(Some("")));
+        assert!(!music_enabled_from(Some("true")));
+        assert!(music_enabled_from(Some("1")));
     }
 
     #[test]

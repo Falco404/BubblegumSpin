@@ -2,13 +2,13 @@
 <!-- Keep under 40 lines. Rewrite, don't append. -->
 
 ## Now
-**M1–M6 merged; M7 in review** (PR #15, branch `hermes/port-m7`). 215 tests green,
+**M1–M6 merged; M7 in review** (PR #15, branch `hermes/port-m7`). 216 tests green,
 `clippy -D warnings` and `fmt --check` clean. `main` = `47aa4a6`; the branch adds the
 synth, the sfx/music data and the exact `sfx()`/`music()` calls.
 
-Two audio bugs found by ear, both now fixed on the branch: `macroquad`'s `audio`
-feature was never enabled (silent binaries), and the instrument table was shifted by
-one, so the cart's organ played as a buzzy pulse over the tune.
+Audio is now **effects only**: music ships muted because the ported tracks still do
+not sound like the cart after two fixes (the `macroquad` feature, the shifted
+instrument table). `BGS_MUSIC=1` brings the music back for a listen.
 
 ## Where we are
 - Milestones are issues #1–#8; issues and PRs share one number sequence.
