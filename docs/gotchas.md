@@ -73,9 +73,5 @@
   launch with `UnsatisfiedLinkError`; CI compares the two.
 - `cargo quad-apk` 0.1.4 cannot read a `Cargo.lock` v4, shells out to the `dx` that build-tools 31+
   removed, and wants JDK 8's `rt.jar`; CI pins master by rev. The runner's NDK r27 ships only
-  `llvm-*`, so `ar`/`ld`/`readelf` are symlinked and `-lunwind` comes from clang's dir.
-- The APK is arm64 and debug-signed: a reinstall needs an uninstall first.
-
-## Tooling and the repo
-
-- Rust and the system libraries are in the image: **do not install anything**; CI builds every platform.
+  `llvm-*`, so `ar`/`ld`/`readelf` are symlinked and `-lunwind` comes from clang's dir. The APK is
+  arm64, debug-signed: a reinstall needs an uninstall first.
