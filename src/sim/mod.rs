@@ -35,6 +35,21 @@ pub struct Input {
     pub fire: bool,
 }
 
+impl Input {
+    /// Either source can press a button: a held key and a thumb on the same button are
+    /// one press, not two.
+    pub fn merge(self, other: Input) -> Input {
+        Input {
+            left: self.left || other.left,
+            right: self.right || other.right,
+            up: self.up || other.up,
+            down: self.down || other.down,
+            peek: self.peek || other.peek,
+            fire: self.fire || other.fire,
+        }
+    }
+}
+
 /// The whole game state.
 #[derive(Debug, Clone)]
 pub struct Game {
