@@ -1,6 +1,6 @@
 [package]
 name = "bubblegum_spin"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Native port of Bubblegum Spin by Bee_Randon (PICO-8)"
 license = "proprietary"
@@ -15,8 +15,8 @@ license = "proprietary"
 # `cargo quad-apk` reads this block; see docs/RUNNING.md for the build.
 package_name = "com.falco.bubblegum_spin"
 label = "BubblegumSpin"
-version_code = 1
-version_name = "0.1.0"
+version_code = 2
+version_name = "0.2.0"
 # Android 8.0: the floor that still covers phones in use, and what rustc supports.
 min_sdk_version = 26
 target_sdk_version = 34
