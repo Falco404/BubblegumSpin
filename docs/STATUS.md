@@ -6,7 +6,8 @@
 **Android in review** (issue #18, branch `hermes/android`): the save path, on-screen
 controls, the APK metadata and CI are in, the APK builds, and the first phone crash
 (a 0×0 surface panicking the layout on frame one) is fixed with logcat logging added.
-A6 — the `v0.2.0` release — follows the phone check. 256 tests green.
+It runs on the phone (audio works); its pad is now 2.1x bigger, `O`/`X` 1.35x, and back
+steps to the title then quits. A6 — the `v0.2.0` release — follows. 259 tests green.
 
 ## Where we are
 - Milestones are issues #1–#8; issues and PRs share one number sequence.
