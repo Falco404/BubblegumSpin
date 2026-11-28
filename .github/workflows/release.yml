@@ -19,12 +19,12 @@ jobs:
         include:
           - os: ubuntu-latest
             artifact: bubblegum-spin-linux
-            bin: target/release/bubblegum-spin
+            bin: target/release/bubblegum_spin
             asset: bubblegum-spin-linux
             package: bubblegum-spin-linux.zip
           - os: windows-latest
             artifact: bubblegum-spin-windows
-            bin: target/release/bubblegum-spin.exe
+            bin: target/release/bubblegum_spin.exe
             asset: bubblegum-spin-windows
             package: bubblegum-spin-windows.zip
     runs-on: ${{ matrix.os }}
@@ -45,8 +45,62 @@ jobs:
           path: ${{ matrix.bin }}
           if-no-files-found: error
 
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - uses: actions/setup-java@v4
+        with:
+          # build-tools' `d8` needs a JDK 11+; master's cargo-quad-apk no longer
+          # wants the JDK 8 `rt.jar` that pinned us to 8 before.
+          distribution: temurin
+          java-version: "17"
+      - name: Prepare the NDK
+        run: |
+          ndk="${ANDROID_NDK_HOME:-${ANDROID_NDK_LATEST_HOME:-${ANDROID_NDK_ROOT}}}"
+          test -n "$ndk" || { echo "no NDK on the runner"; exit 1; }
+          echo "using NDK at $ndk"
+          bin="$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          # NDK r27 ships only `llvm-*`, but the 2025 cargo-quad-apk still looks for
+          # the per-target binutils names (it wanted `ar`, then `ld`). Link them.
+          for pair in ar:llvm-ar ranlib:llvm-ranlib ld:ld.lld strip:llvm-strip nm:llvm-nm objcopy:llvm-objcopy readelf:llvm-readelf objdump:llvm-objdump; do
+            want="$bin/aarch64-linux-android-${pair%%:*}"
+            have="$bin/${pair##*:}"
+            test -e "$want" || ln -s "$have" "$want"
+          done
+          ls -l "$bin"/aarch64-linux-android-{ar,ld,ranlib}
+          # rustc's Android targets ask for `-lunwind`, which r27 moved out of the
+          # sysroot and into clang's resource directory.
+          sysroot="$ndk/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+          unwind=$(ls "$ndk"/toolchains/llvm/prebuilt/linux-x86_64/lib/clang/*/lib/linux/aarch64/libunwind.a 2>/dev/null | head -1)
+          test -n "$unwind" || { echo "libunwind.a is not in this NDK"; exit 1; }
+          for dir in "$sysroot/usr/lib/aarch64-linux-android/26" "$sysroot/usr/lib/aarch64-linux-android"; do
+            mkdir -p "$dir"
+            test -e "$dir/libunwind.a" || ln -s "$unwind" "$dir/libunwind.a"
+          done
+          echo "NDK_HOME=$ndk" >> "$GITHUB_ENV"
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-quad-apk
+        run: |
+          # Pinned to master: the 0.1.4 crates.io release still shells out to `dx`,
+          # which build-tools 31+ replaced with `d8`.
+          cargo install --git https://github.com/not-fl3/cargo-quad-apk \
+            --rev d411c8fe1c08339e46d7dc6b40ac04ea5e3a01b6 --locked
+      - name: Build the APK
+        # `--bin`: the helper binaries (shot, board_dump, wav_dump) are desktop tools
+        # and would otherwise each get an APK of their own.
+        run: cargo quad-apk build --release --bin bubblegum_spin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bubblegum-spin-android
+          path: target/android-artifacts/release/apk/*.apk
+          if-no-files-found: error
+
   publish:
-    needs: build
+    needs: [build, android]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -71,4 +125,5 @@ jobs:
             --title "BubblegumSpin ${GITHUB_REF_NAME}" \
             --notes "Native port of Bubblegum Spin (PICO-8, v1.1) by Bee_Randon. Private, non-commercial use only. Windows and Linux binaries below; background music is off by default (\`BGS_MUSIC=1\` turns it on)." \
             --clobber \
-            dist/bubblegum-spin-windows.zip dist/bubblegum-spin-linux.zip
+            dist/bubblegum-spin-windows.zip dist/bubblegum-spin-linux.zip \
+            dist/bubblegum-spin-android/*.apk

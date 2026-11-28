@@ -13,3 +13,4 @@ pub mod grid;
 pub mod p8math;
 pub mod save;
 pub mod sim;
+pub mod ui;

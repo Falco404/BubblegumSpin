@@ -12,6 +12,7 @@ use bubblegum_spin::gfx::{fb::Fb, menus, scenes::fade_scr};
 use bubblegum_spin::save::Save;
 use bubblegum_spin::sim::scene::App;
 use bubblegum_spin::sim::{Game, Input};
+use bubblegum_spin::ui::{Layout, Strip};
 use macroquad::audio::{load_sound_from_bytes, play_sound, stop_sound, PlaySoundParams, Sound};
 use macroquad::prelude::*;
 
@@ -113,6 +114,42 @@ impl Audio {
     }
 }
 
+/// Say something once: to stderr, and on Android to logcat, which is the only place a
+/// phone can show it (a native app's stderr goes nowhere).
+fn say(message: &str) {
+    eprintln!("{message}");
+    #[cfg(target_os = "android")]
+    android_log::line("bubblegum-spin", message);
+}
+
+/// logcat plumbing. The phone reports "the app has a bug and stopped" with no detail,
+/// so panics and the startup facts have to be written where `adb logcat` can see them.
+#[cfg(target_os = "android")]
+mod android_log {
+    use std::ffi::CString;
+
+    /// 4 is `ANDROID_LOG_INFO`.
+    const INFO: i32 = 4;
+
+    pub fn line(tag: &str, message: &str) {
+        let (Ok(tag), Ok(message)) = (CString::new(tag), CString::new(message)) else {
+            return;
+        };
+        // Safety: both pointers are valid NUL-terminated strings for the call.
+        unsafe { ndk_sys::__android_log_write(INFO, tag.as_ptr(), message.as_ptr()) };
+    }
+
+    /// A Rust panic aborts the process on Android with no visible output; this puts the
+    /// message and the source location in logcat before the default hook runs.
+    pub fn install_panic_hook() {
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            line("bubblegum-spin", &format!("PANIC {info}"));
+            previous(info);
+        }));
+    }
+}
+
 /// PICO-8's `_update60`: one simulation step per 1/60 s.
 const STEP: f32 = 1.0 / 60.0;
 /// Default window size: 4x the 128x128 screen.
@@ -129,7 +166,10 @@ fn window_conf() -> Conf {
     }
 }
 
-fn read_input() -> Input {
+/// The cart's buttons: the keyboard on a desktop, the on-screen pad on a phone, and
+/// both wherever a window happens to have a strip (`BGS_TOUCH=1` gives a desktop one).
+fn read_input(layout: &Layout) -> Input {
+    let pad = layout.input(&touch_points(layout.strip.is_some()));
     Input {
         left: is_key_down(KeyCode::Left) || is_key_down(KeyCode::A),
         right: is_key_down(KeyCode::Right) || is_key_down(KeyCode::D),
@@ -139,13 +179,110 @@ fn read_input() -> Input {
         fire: is_key_down(KeyCode::X) || is_key_down(KeyCode::K),
         peek: is_key_down(KeyCode::Z) || is_key_down(KeyCode::J),
     }
+    .merge(pad)
+}
+
+/// Every finger and button currently down, in screen coordinates.
+///
+/// On the phone that is `touches()`; with `BGS_TOUCH=1` on a desktop, the mouse drives
+/// the same strip so the layout can be checked without an APK.
+fn touch_points(touch_mode: bool) -> Vec<(f32, f32)> {
+    let mut points: Vec<(f32, f32)> = touches()
+        .iter()
+        .filter(|t| !matches!(t.phase, TouchPhase::Ended | TouchPhase::Cancelled))
+        .map(|t| (t.position.x, t.position.y))
+        .collect();
+    if touch_mode && !cfg!(target_os = "android") && is_mouse_button_down(MouseButton::Left) {
+        let (x, y) = mouse_position();
+        points.push((x, y));
+    }
+    points
+}
+
+/// Cartesian input from a 4-way pad: which way a press leans, as a unit vector.
+fn pad_lean(x: f32, y: f32, cx: f32, cy: f32) -> (f32, f32) {
+    let (dx, dy) = (x - cx, y - cy);
+    if dx.abs() > dy.abs() {
+        (dx.signum(), 0.0)
+    } else {
+        (0.0, dy.signum())
+    }
+}
+
+/// The on-screen controls: a pad, `O` and `X`, translucent so the board stays visible.
+fn draw_controls(strip: &Strip) {
+    let dim = Color::new(1.0, 1.0, 1.0, 0.18);
+    let ink = Color::new(1.0, 1.0, 1.0, 0.65);
+    let (px, py, side) = strip.pad();
+    draw_rectangle(px, py, side, side, dim);
+    let (cx, cy) = (px + side / 2.0, py + side / 2.0);
+    let (lx, ly) = pad_lean(cx - side, cy, cx, cy);
+    let arm = side * 0.28;
+    let thick = side * 0.12;
+    // The four arms, so the pad reads as a d-pad rather than a square.
+    let arms = [
+        (lx, ly),
+        (-lx, -ly),
+        (
+            pad_lean(cx, cy - side, cx, cy).0,
+            pad_lean(cx, cy - side, cx, cy).1,
+        ),
+        (
+            pad_lean(cx, cy + side, cx, cy).0,
+            pad_lean(cx, cy + side, cx, cy).1,
+        ),
+    ];
+    for (ax, ay) in arms {
+        if ax == 0.0 && ay == 0.0 {
+            continue;
+        }
+        let (w, h) = if ax != 0.0 {
+            (arm, thick)
+        } else {
+            (thick, arm)
+        };
+        draw_rectangle(
+            cx + ax * arm / 2.0 - w / 2.0,
+            cy + ay * arm / 2.0 - h / 2.0,
+            w,
+            h,
+            ink,
+        );
+    }
+
+    let (peek, fire) = strip.action_buttons();
+    let size = strip.button_side();
+    let font = size * 0.5;
+    for (x, y, label) in [(peek.0, peek.1, "O"), (fire.0, fire.1, "X")] {
+        draw_rectangle(x, y, size, size, dim);
+        let metrics = measure_text(label, None, font as u16, 1.0);
+        draw_text(
+            label,
+            x + (size - metrics.width) / 2.0,
+            y + (size + metrics.height) / 2.0,
+            font,
+            ink,
+        );
+    }
 }
 
 #[macroquad::main(window_conf)]
 async fn main() {
-    // cart `_init()`: the hiscore lives beside the executable.
+    // cart `_init()`: the hiscore lives beside the executable, or under `$HOME` on a
+    // phone. Say where it went once — it is the only way to check this on a device
+    // without a debugger, and it is one line in a console nobody reads otherwise.
     let save_path = Save::default_path();
     let save = save_path.as_deref().map(Save::load).unwrap_or_default();
+    #[cfg(target_os = "android")]
+    android_log::install_panic_hook();
+    match save_path.as_deref() {
+        Some(path) => say(&format!(
+            "save: {} (hiscore {})",
+            path.display(),
+            save.hiscore
+        )),
+        None => say("save: none — the hiscore will not persist"),
+    }
     // PICO-8 seeds its own generator; the port takes a fresh seed per run so the
     // board is not identical every game. `Rng::new` maps 0 to a constant.
     let seed = std::time::SystemTime::now()
@@ -156,7 +293,7 @@ async fn main() {
     let mut audio = Audio::new();
     if !audio.music_on {
         // One line, once, so it is obvious why there is no theme.
-        eprintln!("audio: music off (set BGS_MUSIC=1 to hear it); effects on");
+        say("audio: music off (set BGS_MUSIC=1 to hear it); effects on");
     }
     let mut fb = Fb::new();
     // cart `_draw`: the fade is applied to the palette, then the scene draws.
@@ -173,11 +310,38 @@ async fn main() {
         bytes: Vec::new(),
     };
 
+    // The phone has no keyboard, so its buttons are drawn under the picture;
+    // `BGS_TOUCH=1` gives a desktop window the same strip to check the layout.
+    let touch = cfg!(target_os = "android") || std::env::var_os("BGS_TOUCH").is_some();
+
     let mut accumulator = 0.0f32;
+    let mut reported_surface = false;
     loop {
+        // Recomputed every frame: the window can be resized, and on a phone the
+        // notches and the rotation can change `screen_width()` at runtime.
+        let layout = Layout::for_screen(screen_width(), screen_height(), touch);
+        if !reported_surface && screen_width() > 0.0 && screen_height() > 0.0 {
+            reported_surface = true;
+            say(&format!(
+                "surface: {}x{}, picture {}x{} at ({}, {}), controls {}",
+                screen_width(),
+                screen_height(),
+                layout.picture.side,
+                layout.picture.side,
+                layout.picture.x,
+                layout.picture.y,
+                if layout.strip.is_some() { "on" } else { "off" },
+            ));
+        }
         // Fixed step, capped so a stall does not replay hundreds of frames.
         accumulator += get_frame_time().min(0.25);
-        let input = read_input();
+        // The phone's back button: out of the current screen, and off the app from the
+        // title. miniquad's Java glue swallows every key, so nothing happens unless the
+        // port acts on it.
+        if is_key_pressed(KeyCode::Back) && app.back() {
+            std::process::exit(0);
+        }
+        let input = read_input(&layout);
         while accumulator >= STEP {
             app.step(&input);
             accumulator -= STEP;
@@ -190,21 +354,20 @@ async fn main() {
         texture.update(&image);
 
         clear_background(BLACK);
-        let scale = (screen_width() / 128.0)
-            .min(screen_height() / 128.0)
-            .floor()
-            .max(1.0);
-        let (w, h) = (128.0 * scale, 128.0 * scale);
+        let picture = layout.picture;
         draw_texture_ex(
             &texture,
-            ((screen_width() - w) / 2.0).floor(),
-            ((screen_height() - h) / 2.0).floor(),
+            picture.x,
+            picture.y,
             WHITE,
             DrawTextureParams {
-                dest_size: Some(vec2(w, h)),
+                dest_size: Some(vec2(picture.side, picture.side)),
                 ..Default::default()
             },
         );
+        if let Some(strip) = layout.strip {
+            draw_controls(&strip);
+        }
         next_frame().await;
     }
 }

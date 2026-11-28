@@ -20,8 +20,15 @@ pub struct Save {
     pub completed: bool,
 }
 
-/// The file name used next to the executable.
+/// The save file's name, wherever it ends up.
 pub const FILE_NAME: &str = "save.dat";
+
+/// An environment variable as a path, treating an empty value as unset.
+fn non_empty_var(name: &str) -> Option<PathBuf> {
+    std::env::var_os(name)
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+}
 
 impl Save {
     /// Read a save file. A missing or unreadable file is an empty save, never an
@@ -59,11 +66,46 @@ impl Save {
         fs::write(path, text)
     }
 
-    /// The default location: `save.dat` beside the executable.
+    /// The default location of `save.dat`, and the order the targets need:
+    ///
+    /// 1. `BGS_SAVE` — a full path; the escape hatch for tests and for a phone that
+    ///    hides its storage.
+    /// 2. Android — `$HOME/save.dat`. `current_exe()` there is a read-only file inside
+    ///    the APK (`/data/app/.../base.apk`), so the executable's folder is never used.
+    /// 3. Desktop — beside the executable, as it has been since M5, falling back to
+    ///    `$HOME` when the executable's folder cannot be worked out.
+    ///
+    /// `None` means "run without a hiscore", never an error: a phone that hides `HOME`
+    /// should still play.
     pub fn default_path() -> Option<PathBuf> {
-        std::env::current_exe()
-            .ok()
-            .and_then(|exe| exe.parent().map(|dir| dir.join(FILE_NAME)))
+        let save = non_empty_var("BGS_SAVE");
+        let home = non_empty_var("HOME");
+        let exe = std::env::current_exe().ok();
+        Self::default_path_from(
+            save.as_deref(),
+            home.as_deref(),
+            exe.as_deref(),
+            cfg!(target_os = "android"),
+        )
+    }
+
+    /// [`Save::default_path`] with every input injected, so each target's rule can be
+    /// tested on any host.
+    pub fn default_path_from(
+        save: Option<&Path>,
+        home: Option<&Path>,
+        exe: Option<&Path>,
+        android: bool,
+    ) -> Option<PathBuf> {
+        if let Some(save) = save {
+            return Some(save.to_path_buf());
+        }
+        if android {
+            return home.map(|dir| dir.join(FILE_NAME));
+        }
+        exe.and_then(Path::parent)
+            .map(|dir| dir.join(FILE_NAME))
+            .or_else(|| home.map(|dir| dir.join(FILE_NAME)))
     }
 }
 
@@ -102,6 +144,63 @@ mod tests {
         fs::write(&path, "hiscore=not-a-number\nnonsense\n").unwrap();
         assert_eq!(Save::load(&path), Save::default());
         let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn a_full_path_in_bgs_save_wins_everywhere() {
+        // The escape hatch: whatever the platform thinks, `BGS_SAVE` is obeyed.
+        let path = Save::default_path_from(
+            Some(Path::new(
+                "/data/user/0/com.falco.bubblegumspin/files/mine.dat",
+            )),
+            Some(Path::new("/home/falco")),
+            Some(Path::new("/opt/game/bubblegum-spin")),
+            true,
+        );
+        assert_eq!(
+            path.unwrap(),
+            PathBuf::from("/data/user/0/com.falco.bubblegumspin/files/mine.dat")
+        );
+    }
+
+    #[test]
+    fn android_saves_under_home_and_never_beside_the_apk() {
+        // `current_exe()` inside an APK is a read-only path in /data/app, so the
+        // executable's folder must not be used there even when it is known.
+        let path = Save::default_path_from(
+            None,
+            Some(Path::new("/data/user/0/com.falco.bubblegumspin/files")),
+            Some(Path::new("/data/app/~~abc==/base.apk")),
+            true,
+        );
+        assert_eq!(
+            path.unwrap(),
+            PathBuf::from("/data/user/0/com.falco.bubblegumspin/files/save.dat")
+        );
+    }
+
+    #[test]
+    fn android_without_a_home_has_no_save_file() {
+        // Better no hiscore than a panic at startup on a device that hides `HOME`.
+        let path = Save::default_path_from(None, None, None, true);
+        assert!(path.is_none());
+    }
+
+    #[test]
+    fn a_desktop_saves_beside_the_executable() {
+        let path = Save::default_path_from(
+            None,
+            Some(Path::new("/home/falco")),
+            Some(Path::new("/opt/game/bubblegum-spin")),
+            false,
+        );
+        assert_eq!(path.unwrap(), PathBuf::from("/opt/game/save.dat"));
+    }
+
+    #[test]
+    fn a_desktop_without_an_executable_path_falls_back_to_home() {
+        let path = Save::default_path_from(None, Some(Path::new("/home/falco")), None, false);
+        assert_eq!(path.unwrap(), PathBuf::from("/home/falco/save.dat"));
     }
 
     #[test]

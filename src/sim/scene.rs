@@ -261,6 +261,18 @@ impl App {
         self.game.fade.step();
     }
 
+    /// The phone's back button: step back to the title, or off the app from there.
+    ///
+    /// Returns `true` when the caller should quit — the cart has no "exit" screen, so
+    /// back on the title is the only place the port ends.
+    pub fn back(&mut self) -> bool {
+        if self.scene == Scene::Main {
+            return true;
+        }
+        self.enter_main();
+        false
+    }
+
     /// cart `init_main()`: title music, a fade in, and the two-entry menu.
     fn enter_main(&mut self) {
         self.game.music(0);
@@ -641,6 +653,25 @@ mod tests {
         settle(&mut app);
         tap(&mut app, pressed());
         assert_eq!(app.scene, Scene::Coin);
+    }
+
+    #[test]
+    fn the_back_button_steps_back_to_the_title_and_quits_from_there() {
+        let mut app = App::new(7);
+        assert!(app.back(), "on the title, back is the app's exit");
+
+        settle(&mut app);
+        tap(&mut app, pressed());
+        assert_eq!(app.scene, Scene::Coin);
+        assert!(!app.back(), "from a scene, back returns to the title");
+        assert_eq!(app.scene, Scene::Main);
+        assert_eq!(app.nav, &MAIN_NAV[..]);
+
+        app.game.new_game();
+        app.scene = Scene::Game;
+        assert!(!app.back());
+        assert_eq!(app.scene, Scene::Main, "even mid-game");
+        assert!(app.back());
     }
 
     #[test]

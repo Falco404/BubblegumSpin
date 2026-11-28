@@ -7,8 +7,8 @@ non-commercial reimplementation. See `docs/decisions.md`.
 The whole cart is playable: title screen and menu, the how-to pages, the coin drop,
 the game itself (aim and fire with `←`/`→`/`↑` and `X`, hold `Z` to peek at the HUD),
 the score screen with the machine dispensing your gumballs, and a hiscore that
-survives a restart. Background music is off by default — `BGS_MUSIC=1 cargo run`
-turns it on. `docs/STATUS.md` says where we are and `docs/gotchas.md` collects the
+survives a restart. It runs on Windows, Linux and Android; on a phone the controls are drawn on screen.
+Background music is off by default — `BGS_MUSIC=1 cargo run` turns it on. `docs/STATUS.md` says where we are and `docs/gotchas.md` collects the
 traps.
 
 ## Credits and licences

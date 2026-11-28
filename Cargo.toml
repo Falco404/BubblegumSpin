@@ -1,13 +1,44 @@
 [package]
-name = "bubblegum-spin"
+name = "bubblegum_spin"
 version = "0.1.0"
 edition = "2021"
 description = "Native port of Bubblegum Spin by Bee_Randon (PICO-8)"
 license = "proprietary"
 
+# The package name has no hyphen on purpose: it is the binary's name, and the binary's
+# name is the .so's name, while cargo-quad-apk's Java glue loads whatever the *last
+# segment of package_name* is. With a hyphen those two disagreed (`libbubblegumspin.so`
+# against `libbubblegum-spin.so`) and the APK died on launch. No explicit `[[bin]]`
+# either: a secondary target does not inherit `package_name` from the block below.
+
+[package.metadata.android]
+# `cargo quad-apk` reads this block; see docs/RUNNING.md for the build.
+package_name = "com.falco.bubblegum_spin"
+label = "BubblegumSpin"
+version_code = 1
+version_name = "0.1.0"
+# Android 8.0: the floor that still covers phones in use, and what rustc supports.
+min_sdk_version = 26
+target_sdk_version = 34
+android_version = 34
+# Only arm64: the phone this is for, and half the build time.
+build_targets = ["aarch64-linux-android"]
+res = "res"
+icon = "@mipmap/ic_launcher"
+fullscreen = true
+
+[package.metadata.android.activity_attributes]
+"android:exported" = "true"
+"android:screenOrientation" = "portrait"
+
 [dependencies]
 macroquad = { version = "0.4", features = ["audio"] }
 png = "0.17"
+
+[target.'cfg(target_os = "android")'.dependencies]
+# Already in the tree via miniquad; used only to put panics in logcat, where a phone
+# can show them — Android sends stderr to nowhere.
+ndk-sys = "0.2"
 
 [dev-dependencies]
 png = "0.17"

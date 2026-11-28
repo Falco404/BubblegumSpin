@@ -13,6 +13,8 @@ Everything is plain `cargo`; there are no scripts and no environment variables.
   on Linux/macOS, or `$env:BGS_MUSIC="1"; cargo run` in PowerShell, turns it back on.
 * Debian/WSL with no display: `cargo test` and `cargo run --bin shot` still work,
   because the framebuffer is software. Only `cargo run` needs a screen.
+* **Android builds happen on CI only.** This container has no Android SDK/NDK and
+  nothing gets installed; the `android` job on the ubuntu runner has both.
 
 ## Commands
 
@@ -37,7 +39,7 @@ Everything is plain `cargo`; there are no scripts and no environment variables.
 | Hear one track | `cargo run --bin wav_dump -- --music 16 --out out/round.wav` | ditto, the round theme |
 | Tests | `cargo test` | `test result: ok. ...` |
 | Lints / format | `cargo clippy --all-targets`, `cargo fmt --check` | no output = clean |
-| Release build | `cargo build --release` | `target/release/bubblegum-spin[.exe]` |
+| Release build | `cargo build --release` | `target/release/bubblegum_spin[.exe]` |
 
 `out/` is gitignored. Screenshots are the primary visual evidence in PRs: render
 with `shot`, attach the PNG, and quote the size.
@@ -53,6 +55,28 @@ with `shot`, attach the PNG, and quote the size.
 | `Z` (J) | O | hold to peek at the score, the next gumballs and your remaining misses |
 
 The titles screen's menu is `↑`/`↓` then `X`; the score screen works the same way.
+
+## Android
+
+The APK is built by the `android` CI job on every push (arm64, minSdk 26, portrait,
+fullscreen, debug-signed) and attached to a release by the `release` job on a `v*` tag.
+
+```
+gh run download --name bubblegum-spin-android --dir bgs-apk   # from the latest run
+adb install -r bgs-apk/*.apk
+adb logcat | grep -i bubblegum                               # the `save:` line shows the path
+```
+
+Without `adb`: copy the APK to the phone, tap it, and allow installs from that source.
+The phone has the same six buttons on screen — a four-way pad bottom-left, `O` and `X`
+on the right — drawn over the bottom strip of the window.
+
+A desktop window can show the same strip, with the mouse driving it, before an APK
+exists:
+
+```
+set BGS_TOUCH=1 && cargo run        # PowerShell;  BGS_TOUCH=1 cargo run  on Linux
+```
 
 ## Generated code
 
@@ -110,7 +134,7 @@ request, on `windows-latest` and `ubuntu-latest`. To get a binary:
 
 1. Open the repo's **Actions** tab and pick the newest `build` run.
 2. At the bottom of the run page, download the **Artifacts**:
-   `bubblegum-spin-windows` (a zip containing `bubblegum-spin.exe`) or
+   `bubblegum-spin-windows` (a zip containing `bubblegum_spin.exe`) or
    `bubblegum-spin-linux` (`bubblegum-spin`).
 3. Unzip and run the binary. Until M6 the game loads no data files, so the bare
    executable is enough; after that a packaged release (M8) is the way.
