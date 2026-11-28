@@ -4,10 +4,94 @@
 //! keyboard, advances the simulation at a fixed 60 Hz, and uploads the frame as
 //! a texture scaled by an integer factor so the 128x128 picture stays crisp.
 
+use std::collections::HashMap;
+
+use bubblegum_spin::audio::{render_music, render_sfx, to_wav, Sfx, SAMPLE_RATE};
 use bubblegum_spin::gfx::{fb::Fb, scenes::draw_game};
 use bubblegum_spin::save::Save;
 use bubblegum_spin::sim::{Game, Input};
+use macroquad::audio::{load_sound_from_bytes, play_sound, stop_sound, PlaySoundParams, Sound};
 use macroquad::prelude::*;
+
+/// The game's audio: each effect and track is rendered to a WAV and handed to
+/// `macroquad` the first time it is asked for, so startup stays instant.
+///
+/// The simulation only queues ids (`Game::take_sfx`/`take_music`); this is the only
+/// place that touches the audio device.
+struct Audio {
+    sfx: HashMap<u8, Sound>,
+    music: HashMap<u8, Sound>,
+    playing_music: Option<u8>,
+}
+
+impl Audio {
+    fn new() -> Self {
+        Self {
+            sfx: HashMap::new(),
+            music: HashMap::new(),
+            playing_music: None,
+        }
+    }
+
+    async fn sfx(&mut self, id: u8) -> Option<Sound> {
+        if let Some(sound) = self.sfx.get(&id) {
+            return Some(sound.clone());
+        }
+        let samples = render_sfx(&Sfx::from_id(id), SAMPLE_RATE);
+        let sound = load_sound_from_bytes(&to_wav(&samples, SAMPLE_RATE))
+            .await
+            .ok()?;
+        self.sfx.insert(id, sound.clone());
+        Some(sound)
+    }
+
+    async fn music(&mut self, id: u8) -> Option<Sound> {
+        if let Some(sound) = self.music.get(&id) {
+            return Some(sound.clone());
+        }
+        let samples = render_music(id, SAMPLE_RATE);
+        let sound = load_sound_from_bytes(&to_wav(&samples, SAMPLE_RATE))
+            .await
+            .ok()?;
+        self.music.insert(id, sound.clone());
+        Some(sound)
+    }
+
+    /// Play everything the simulation asked for this frame.
+    async fn play(&mut self, game: &mut Game) {
+        for id in game.take_sfx() {
+            if let Some(sound) = self.sfx(id).await {
+                play_sound(
+                    &sound,
+                    PlaySoundParams {
+                        looped: false,
+                        volume: 0.6,
+                    },
+                );
+            }
+        }
+        for id in game.take_music() {
+            if self.playing_music == Some(id) {
+                continue;
+            }
+            if let Some(current) = self.playing_music {
+                if let Some(old) = self.music.get(&current).cloned() {
+                    stop_sound(&old);
+                }
+            }
+            if let Some(sound) = self.music(id).await {
+                play_sound(
+                    &sound,
+                    PlaySoundParams {
+                        looped: true,
+                        volume: 0.5,
+                    },
+                );
+                self.playing_music = Some(id);
+            }
+        }
+    }
+}
 
 /// PICO-8's `_update60`: one simulation step per 1/60 s.
 const STEP: f32 = 1.0 / 60.0;
@@ -47,6 +131,7 @@ async fn main() {
         .map(|d| d.subsec_nanos() ^ d.as_secs() as u32)
         .unwrap_or(1);
     let mut game = Game::new_with_save(seed, save, save_path);
+    let mut audio = Audio::new();
     let mut fb = Fb::new();
     draw_game(&mut fb, &game);
 
@@ -69,6 +154,7 @@ async fn main() {
             game.step(&input);
             accumulator -= STEP;
         }
+        audio.play(&mut game).await;
 
         draw_game(&mut fb, &game);
         image.bytes = fb.to_rgba8();

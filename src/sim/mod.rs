@@ -109,6 +109,12 @@ pub struct Game {
     /// Where `save.dat` lives; `None` in tests and in the headless renderer.
     pub save_path: Option<PathBuf>,
 
+    /// Sound effects asked for since the last drain; `main.rs` plays them. The
+    /// simulation never touches the audio device, so it stays testable.
+    sfx_queue: Vec<u8>,
+    /// Music tracks asked for since the last drain; the last one wins.
+    music_queue: Vec<u8>,
+
     /// Previous state of the fire button, for the press edge.
     prev_fire: bool,
 }
@@ -165,6 +171,8 @@ impl Game {
             shake: Shake::default(),
             save,
             save_path,
+            sfx_queue: Vec::new(),
+            music_queue: Vec::new(),
             prev_fire: false,
         };
         // cart `new_game()`: `col_cnt = min_col_cnt`, `bonus_shots = -1`, then
@@ -217,6 +225,7 @@ impl Game {
         if !self.player_turn && !self.in_flight {
             self.in_flight = true;
             self.fire_bubs();
+            self.sfx(21); // sfx rebuttal
         }
 
         if self.reloading && !self.popping {
@@ -274,6 +283,30 @@ impl Game {
         let (y, dy) = rules::ease_in_out(self.nxt_card_y, target_n, self.nxt_card_dy);
         self.nxt_card_y = y;
         self.nxt_card_dy = dy;
+    }
+
+    /// cart `sfx(n)`: queue a sound effect for the host to play.
+    pub(crate) fn sfx(&mut self, id: u8) {
+        if self.sfx_queue.last() != Some(&id) {
+            self.sfx_queue.push(id);
+        }
+    }
+
+    /// cart `music(n)`: queue a track for the host to play.
+    pub(crate) fn music(&mut self, id: u8) {
+        if self.music_queue.last() != Some(&id) {
+            self.music_queue.push(id);
+        }
+    }
+
+    /// Take the sound effects queued since the last call.
+    pub fn take_sfx(&mut self) -> Vec<u8> {
+        std::mem::take(&mut self.sfx_queue)
+    }
+
+    /// Take the music tracks queued since the last call.
+    pub fn take_music(&mut self) -> Vec<u8> {
+        std::mem::take(&mut self.music_queue)
     }
 
     /// The cart's `#keys(board)`, used as the torque divisor.

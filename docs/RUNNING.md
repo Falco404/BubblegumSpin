@@ -26,7 +26,9 @@ Everything is plain `cargo`; there are no scripts and no environment variables.
 | Level as ASCII | `cargo run --bin board_dump` | 25 rows of `.` `W` `8` `9` |
 | Golden frames | `cargo test --test screens` | byte-compares 5 frames with `tests/golden/` |
 | Re-record goldens | `UPDATE_GOLDENS=1 cargo test --test screens` | rewrites `tests/golden/*.png` after an intended visual change |
-| Re-extract the art | `python3 tools/p8_import.py` | `assets/sprites.bin`, `assets/map.bin` from the cart |
+| Re-extract the art | `python3 tools/p8_import.py` | `assets/{sprites,map,sfx,music}.bin` from the cart |
+| Hear one sound | `cargo run --bin wav_dump -- --sfx 18 --out out/fire.wav` | a WAV you can play |
+| Hear one track | `cargo run --bin wav_dump -- --music 16 --out out/round.wav` | ditto, the round theme |
 | Tests | `cargo test` | `test result: ok. ...` |
 | Lints / format | `cargo clippy --all-targets`, `cargo fmt --check` | no output = clean |
 | Release build | `cargo build --release` | `target/release/bubblegum-spin[.exe]` |
@@ -66,6 +68,13 @@ cargo run
 
 The debug spin key from M3 (`S` / space) is gone: the mass now spins because you
 hit it.
+
+## Audio
+
+The synth is in `src/audio`: it renders a sound effect or music track to samples and
+`to_wav` wraps them in 16-bit mono PCM, which `main.rs` hands to `macroquad` the first
+time the game asks for that id. No device is needed for any of it, so `cargo test` and
+`wav_dump` work headless.
 
 ## Save file
 

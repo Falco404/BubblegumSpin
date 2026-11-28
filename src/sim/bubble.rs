@@ -119,6 +119,7 @@ impl Game {
             b.dy = mul(ay, BUB_SPD);
             b.fired = true;
         }
+        self.sfx(18); // sfx fire
     }
 
     /// cart `fire_bubs()`: the mass's return shot.
@@ -200,6 +201,7 @@ impl Game {
         if self.player_turn {
             let matches = self.board.get_matching(i, col);
             if matches.len() > 2 {
+                self.sfx(12); // sfx match
                 let mut combo = 1;
                 for m in matches {
                     let points = combo * self.col_pool.len() as i32;
@@ -221,11 +223,15 @@ impl Game {
                     }
                 }
             } else {
+                self.sfx(8); // sfx hit
                 self.update_tries();
             }
         }
 
         self.col_pool = self.board.pool();
+        if !self.player_turn {
+            self.sfx(8); // sfx stick
+        }
     }
 
     /// cart `update_falling()`: detached bubbles fall with gravity and drag.
@@ -253,6 +259,7 @@ impl Game {
     /// cart's miss path: the bubble stops being fired, drops into `f_bubs` at
     /// half speed, and the shot is spent.
     fn give_up(&mut self, i: usize, b: &mut Bubble, removed: bool) {
+        self.sfx(19); // sfx missed completely
         b.falling = true;
         b.fired = false;
         b.dx = mul(b.dx, HALF);
@@ -294,12 +301,14 @@ impl Game {
                 nx = mid(int(ARENA_LEFT), b.x, int(ARENA_RIGHT));
                 b.dx = -b.dx;
                 self.bounces += 1;
+                self.sfx(8); // sfx bounce
             }
 
             if self.in_play && (ny < int(ARENA_TOP + B_R) || ny > int(ARENA_BOTTOM - B_R)) {
                 ny = mid(int(ARENA_TOP), b.y, int(ARENA_BOTTOM));
                 b.dy = -b.dy;
                 self.bounces += 1;
+                self.sfx(8); // sfx bounce
             }
 
             if self.bounces > BOUNCE_LIMIT {

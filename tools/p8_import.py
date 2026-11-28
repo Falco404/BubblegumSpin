@@ -69,6 +69,73 @@ def map_bytes(sections):
     return bytes(out)
 
 
+def sfx_bytes(sections):
+    """64 sound effects in PICO-8's 68-byte RAM layout.
+
+    The `.p8` text form is *not* the RAM layout: a line is 84 bytes, with four
+    header bytes (editor mode, speed, loop start, loop end) followed by 32 notes of
+    **20 bits** (five nibbles: pitch hi/lo, waveform, volume, effect). The RAM form
+    packs each note into 16 bits, so this converts one to the other.
+
+    RAM note layout (little endian):
+      low byte:  w w p p p p p p
+      high byte: c e e e v v v w
+    """
+    rows = [r for r in sections.get("sfx", []) if r.strip()]
+    if len(rows) != 64:
+        raise SystemExit(f"expected 64 sfx lines, found {len(rows)}")
+    out = bytearray()
+    for row in rows:
+        data = bytes.fromhex(row.strip())
+        if len(data) != 84:
+            raise SystemExit(f"expected 84 bytes per sfx line, found {len(data)}")
+        nibbles = []
+        for byte in data[4:]:
+            nibbles.append(byte >> 4)
+            nibbles.append(byte & 0x0F)
+        for n in range(32):
+            base = n * 5
+            pitch = (nibbles[base] << 4) | nibbles[base + 1]
+            wave = nibbles[base + 2]
+            volume = nibbles[base + 3]
+            effect = nibbles[base + 4]
+            if pitch > 63 or volume > 7 or effect > 7 or wave > 15:
+                raise SystemExit(f"note {n} out of range in sfx line: {row}")
+            lsb = pitch | ((wave & 3) << 6)
+            msb = ((wave >> 2) & 1) | (volume << 1) | (effect << 4) | (((wave >> 3) & 1) << 7)
+            out.append(lsb)
+            out.append(msb)
+        # The four header bytes come last, exactly as in PICO-8's RAM layout.
+        out.extend(data[0:4])  # mode, speed, loop start, loop end
+    if len(out) != 64 * 68:
+        raise SystemExit(f"expected 4352 bytes, wrote {len(out)}")
+    return bytes(out)
+
+
+def music_bytes(sections):
+    """64 music patterns: four channel bytes each (the sfx id per channel)."""
+    rows = [r.strip() for r in sections.get("music", []) if r.strip()]
+    if len(rows) != 64:
+        raise SystemExit(f"expected 64 music lines, found {len(rows)}")
+    out = bytearray()
+    for row in rows:
+        text = row.replace(" ", "")
+        if len(text) != 10:
+            raise SystemExit(f"expected 10 hex digits per music line, found {len(text)}")
+        out.extend(bytes.fromhex(text[2:]))
+    return bytes(out)
+
+
+def music_flags_bytes(sections):
+    """The first two hex digits of each music line: loop-start / loop-end / stop."""
+    rows = [r.strip() for r in sections.get("music", []) if r.strip()]
+    out = bytearray()
+    for row in rows:
+        text = row.replace(" ", "")
+        out.append(int(text[0:2], 16))
+    return bytes(out)
+
+
 def write_if_changed(path, data, check):
     old = None
     if os.path.exists(path):
@@ -119,6 +186,19 @@ def main(argv):
     if "map" in sections:
         ok &= write_if_changed(
             os.path.join(ROOT, "assets", "map.bin"), map_bytes(sections), check
+        )
+    if "sfx" in sections:
+        ok &= write_if_changed(
+            os.path.join(ROOT, "assets", "sfx.bin"), sfx_bytes(sections), check
+        )
+    if "music" in sections:
+        ok &= write_if_changed(
+            os.path.join(ROOT, "assets", "music.bin"), music_bytes(sections), check
+        )
+        ok &= write_if_changed(
+            os.path.join(ROOT, "assets", "music_flags.bin"),
+            music_flags_bytes(sections),
+            check,
         )
     return 0 if ok else 1
 

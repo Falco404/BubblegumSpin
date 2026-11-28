@@ -4,13 +4,12 @@ A native port of **Bubblegum Spin** (PICO-8, v1.1) by **Bee_Randon**. All game
 design and original art, sound and code are his; this is a private,
 non-commercial reimplementation. See `docs/decisions.md`.
 
-Work in progress: a full game loop with the cart's own art — sprites, the HUD, the
-banners and the fade, all from the cart's sprite sheet. Aim and fire (`←`/`→`/`↑`,
-`X`), the bubble bounces, sticks and twists the mass, matches pop and score, four
-shots that clear nothing let the mass shoot back, clearing the board starts the next
-round with one more colour, and touching the wall ends the game with your hiscore
-saved (M1–M6). Sound and the menus are M7–M8. `docs/STATUS.md` says where we are and
-`docs/gotchas.md` collects the traps.
+Work in progress: a playable game with the cart's own art and sound. Aim and fire
+(`←`/`→`/`↑`, `X`), the bubble bounces, sticks and twists the mass, matches pop and
+score with their own sound, four shots that clear nothing let the mass shoot back,
+clearing the board starts the next round with one more colour, and touching the wall
+ends the game with your hiscore saved (M1–M7). The menus and the tutorial are M8.
+`docs/STATUS.md` says where we are and `docs/gotchas.md` collects the traps.
 
 ## Credits and licences
 
