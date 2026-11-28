@@ -32,7 +32,7 @@ jobs:
           bin="$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
           # NDK r27 ships only `llvm-*`, but the 2025 cargo-quad-apk still looks for
           # the per-target binutils names (it wanted `ar`, then `ld`). Link them.
-          for pair in ar:llvm-ar ranlib:llvm-ranlib ld:ld.lld strip:llvm-strip nm:llvm-nm objcopy:llvm-objcopy; do
+          for pair in ar:llvm-ar ranlib:llvm-ranlib ld:ld.lld strip:llvm-strip nm:llvm-nm objcopy:llvm-objcopy readelf:llvm-readelf objdump:llvm-objdump; do
             want="$bin/aarch64-linux-android-${pair%%:*}"
             have="$bin/${pair##*:}"
             test -e "$want" || ln -s "$have" "$want"
