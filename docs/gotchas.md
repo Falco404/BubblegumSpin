@@ -66,8 +66,7 @@
 - PICO-8 draws a **negative `sspr` size mirrored** — the score screen's gumballs rely on it
   (`dw=(32/y)*3+2` goes negative above the machine), so clamp the size, not the sign.
 - `btnp` is press, then every 4 frames after 15 held: firing and both menus use it, so a held `X` repeats.
-- The how-to text's `y` is 1-based (`i*8+1-2`), and its pink pass is a drop shadow one pixel
-  *below* the white one.
+- The how-to text's `y` is 1-based (`i*8+1-2`); its pink pass is a drop shadow one pixel *below*.
 
 ## Android
 
