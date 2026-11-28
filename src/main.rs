@@ -7,8 +7,10 @@
 use std::collections::HashMap;
 
 use bubblegum_spin::audio::{music_enabled, render_music, render_sfx, to_wav, Sfx, SAMPLE_RATE};
-use bubblegum_spin::gfx::{fb::Fb, scenes::draw_game};
+use bubblegum_spin::fixed::to_f64;
+use bubblegum_spin::gfx::{fb::Fb, menus, scenes::fade_scr};
 use bubblegum_spin::save::Save;
+use bubblegum_spin::sim::scene::App;
 use bubblegum_spin::sim::{Game, Input};
 use macroquad::audio::{load_sound_from_bytes, play_sound, stop_sound, PlaySoundParams, Sound};
 use macroquad::prelude::*;
@@ -133,8 +135,9 @@ fn read_input() -> Input {
         right: is_key_down(KeyCode::Right) || is_key_down(KeyCode::D),
         up: is_key_down(KeyCode::Up) || is_key_down(KeyCode::W),
         down: is_key_down(KeyCode::Down) || is_key_down(KeyCode::S),
-        // The cart's X button; Z is its O button, which M5 will use.
+        // The cart's X button fires; Z is its O button (hold to peek at the HUD).
         fire: is_key_down(KeyCode::X) || is_key_down(KeyCode::K),
+        peek: is_key_down(KeyCode::Z) || is_key_down(KeyCode::J),
     }
 }
 
@@ -149,14 +152,16 @@ async fn main() {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.subsec_nanos() ^ d.as_secs() as u32)
         .unwrap_or(1);
-    let mut game = Game::new_with_save(seed, save, save_path);
+    let mut app = App::new_with_save(seed, save, save_path);
     let mut audio = Audio::new();
     if !audio.music_on {
         // One line, once, so it is obvious why there is no theme.
         eprintln!("audio: music off (set BGS_MUSIC=1 to hear it); effects on");
     }
     let mut fb = Fb::new();
-    draw_game(&mut fb, &game);
+    // cart `_draw`: the fade is applied to the palette, then the scene draws.
+    fade_scr(&mut fb, to_f64(app.game.fade.value));
+    menus::draw(&mut fb, &app);
 
     let texture = Texture2D::from_rgba8(128, 128, &fb.to_rgba8());
     texture.set_filter(FilterMode::Nearest);
@@ -174,12 +179,13 @@ async fn main() {
         accumulator += get_frame_time().min(0.25);
         let input = read_input();
         while accumulator >= STEP {
-            game.step(&input);
+            app.step(&input);
             accumulator -= STEP;
         }
-        audio.play(&mut game).await;
+        audio.play(&mut app.game).await;
 
-        draw_game(&mut fb, &game);
+        fade_scr(&mut fb, to_f64(app.game.fade.value));
+        menus::draw(&mut fb, &app);
         image.bytes = fb.to_rgba8();
         texture.update(&image);
 

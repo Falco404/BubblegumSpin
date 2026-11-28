@@ -166,6 +166,37 @@ impl Fb {
         }
     }
 
+    /// `sspr` with the source mirrored, as the cart's optional `flipx` does.
+    #[allow(clippy::too_many_arguments)]
+    pub fn sspr_flip(
+        &mut self,
+        sheet: &Sheet,
+        sx: i32,
+        sy: i32,
+        sw: i32,
+        sh: i32,
+        dx: i32,
+        dy: i32,
+        dw: i32,
+        dh: i32,
+    ) {
+        if sw <= 0 || sh <= 0 || dw <= 0 || dh <= 0 {
+            return;
+        }
+        for y in 0..dh {
+            let src_y = sy + (y as i64 * sh as i64 / dh as i64) as i32;
+            for x in 0..dw {
+                let flipped = (dw - 1 - x) as i64;
+                let src_x = sx + (flipped * sw as i64 / dw as i64) as i32;
+                let c = sheet.pixel(src_x, src_y);
+                if self.pal.transparent(c) {
+                    continue;
+                }
+                self.pset(dx + x, dy + y, c);
+            }
+        }
+    }
+
     /// Flatten the buffer to RGB through `pal` and write it as a PNG.
     ///
     /// This is the headless screenshot path: no GPU, no window.

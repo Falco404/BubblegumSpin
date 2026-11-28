@@ -133,9 +133,12 @@ pub struct Coin {
 }
 
 impl Coin {
-    /// Which of the six spin frames to draw (cart `getframe`: `t/10 % #sx`).
+    /// Which spin frame to draw (cart `getframe`: `t/10 % #sx`).
+    ///
+    /// `init_coin()`'s `sx` is `{0,16,32,48,64}`, so there are five frames; the
+    /// `state` table next to it is never read.
     pub fn frame(&self, t: i32) -> usize {
-        (t / 10).rem_euclid(6) as usize
+        (t / 10).rem_euclid(5) as usize
     }
 }
 

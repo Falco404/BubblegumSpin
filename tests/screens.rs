@@ -7,8 +7,11 @@
 use std::path::PathBuf;
 
 use bubblegum_spin::fixed::from_f64;
+use bubblegum_spin::fixed::to_f64;
 use bubblegum_spin::gfx::fb::Fb;
-use bubblegum_spin::gfx::scenes::draw_game;
+use bubblegum_spin::gfx::menus;
+use bubblegum_spin::gfx::scenes::{draw_game, fade_scr};
+use bubblegum_spin::sim::scene::{App, Scene, FINAL_NAV};
 use bubblegum_spin::sim::{Game, Input};
 
 fn golden_dir() -> PathBuf {
@@ -133,4 +136,96 @@ fn a_quarter_turn_frame_matches_its_golden() {
     let mut g = idle(200);
     g.spin.var = from_f64(0.25);
     compare("game-quarter-turn", &render(&g));
+}
+
+/// The scene machine on a given screen, driven the way a player gets there.
+fn app_on(scene: &str) -> App {
+    let mut app = App::new(7);
+    let settle = |app: &mut App| {
+        for _ in 0..200 {
+            if app.game.fade.faded {
+                return;
+            }
+            app.step(&Input::default());
+        }
+    };
+    let tap = |app: &mut App, input: Input| {
+        app.step(&input);
+        app.step(&Input::default());
+    };
+    match scene {
+        "how" => {
+            settle(&mut app);
+            tap(
+                &mut app,
+                Input {
+                    down: true,
+                    ..Default::default()
+                },
+            );
+            tap(
+                &mut app,
+                Input {
+                    fire: true,
+                    ..Default::default()
+                },
+            );
+        }
+        "coin" => {
+            settle(&mut app);
+            tap(
+                &mut app,
+                Input {
+                    fire: true,
+                    ..Default::default()
+                },
+            );
+        }
+        "final" => {
+            app.game.new_game();
+            app.game.score = 700;
+            app.game.fade.finish_in();
+            app.scene = Scene::Final;
+            app.nav = &FINAL_NAV;
+            app.finalani = 1;
+            app.gumballs = 7;
+            app.blow_force = 7;
+        }
+        _ => settle(&mut app),
+    }
+    app
+}
+
+/// One frame of a menu scene, faded and drawn exactly as the window does it.
+fn scene_frame(scene: &str, frames: u32) -> Fb {
+    let mut app = app_on(scene);
+    for _ in 0..frames {
+        app.step(&Input::default());
+    }
+    let mut fb = Fb::new();
+    fade_scr(&mut fb, to_f64(app.game.fade.value));
+    menus::draw(&mut fb, &app);
+    fb
+}
+
+#[test]
+fn the_title_screen_matches_its_golden() {
+    // Sixty frames: the cart fades the title in over fifty.
+    compare("m8-main", &scene_frame("main", 60));
+}
+
+#[test]
+fn the_how_to_page_matches_its_golden() {
+    compare("m8-how", &scene_frame("how", 2));
+}
+
+#[test]
+fn the_coin_drop_matches_its_golden() {
+    compare("m8-coin", &scene_frame("coin", 100));
+}
+
+#[test]
+fn the_score_screen_matches_its_golden() {
+    // Long enough for the dispense, the chew and the bubble to finish.
+    compare("m8-final", &scene_frame("final", 500));
 }
