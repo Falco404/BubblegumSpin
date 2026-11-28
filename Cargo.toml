@@ -1,17 +1,15 @@
 [package]
-name = "bubblegum-spin"
+name = "bubblegum_spin"
 version = "0.1.0"
 edition = "2021"
 description = "Native port of Bubblegum Spin by Bee_Randon (PICO-8)"
 license = "proprietary"
 
-# An explicit bin name: cargo-quad-apk's Java glue calls
-# `System.loadLibrary(<last package segment>)`, while the .so keeps the binary's own
-# name. Those two only agree with underscores, never a hyphen — the first APK loaded
-# `libbubblegumspin.so` against a `libbubblegum-spin.so` and died at launch.
-[[bin]]
-name = "bubblegum_spin"
-path = "src/main.rs"
+# The package name has no hyphen on purpose: it is the binary's name, and the binary's
+# name is the .so's name, while cargo-quad-apk's Java glue loads whatever the *last
+# segment of package_name* is. With a hyphen those two disagreed (`libbubblegumspin.so`
+# against `libbubblegum-spin.so`) and the APK died on launch. No explicit `[[bin]]`
+# either: a secondary target does not inherit `package_name` from the block below.
 
 [package.metadata.android]
 # `cargo quad-apk` reads this block; see docs/RUNNING.md for the build.

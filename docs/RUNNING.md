@@ -39,7 +39,7 @@ Everything is plain `cargo`; there are no scripts and no environment variables.
 | Hear one track | `cargo run --bin wav_dump -- --music 16 --out out/round.wav` | ditto, the round theme |
 | Tests | `cargo test` | `test result: ok. ...` |
 | Lints / format | `cargo clippy --all-targets`, `cargo fmt --check` | no output = clean |
-| Release build | `cargo build --release` | `target/release/bubblegum-spin[.exe]` |
+| Release build | `cargo build --release` | `target/release/bubblegum_spin[.exe]` |
 
 `out/` is gitignored. Screenshots are the primary visual evidence in PRs: render
 with `shot`, attach the PNG, and quote the size.
@@ -134,7 +134,7 @@ request, on `windows-latest` and `ubuntu-latest`. To get a binary:
 
 1. Open the repo's **Actions** tab and pick the newest `build` run.
 2. At the bottom of the run page, download the **Artifacts**:
-   `bubblegum-spin-windows` (a zip containing `bubblegum-spin.exe`) or
+   `bubblegum-spin-windows` (a zip containing `bubblegum_spin.exe`) or
    `bubblegum-spin-linux` (`bubblegum-spin`).
 3. Unzip and run the binary. Until M6 the game loads no data files, so the bare
    executable is enough; after that a packaged release (M8) is the way.
