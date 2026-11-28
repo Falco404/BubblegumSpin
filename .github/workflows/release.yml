@@ -1,0 +1,74 @@
+name: release
+
+# On a version tag: build both platforms and attach the binaries to a GitHub
+# Release, so a download needs no Actions login and stays after the artifact
+# retention window.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: bubblegum-spin-linux
+            bin: target/release/bubblegum-spin
+            asset: bubblegum-spin-linux
+            package: bubblegum-spin-linux.zip
+          - os: windows-latest
+            artifact: bubblegum-spin-windows
+            bin: target/release/bubblegum-spin.exe
+            asset: bubblegum-spin-windows
+            package: bubblegum-spin-windows.zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Linux audio/GL/window deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo -S -p '' apt-get update
+          sudo -S -p '' apt-get install -y libasound2-dev libx11-dev libxi-dev libgl1-mesa-dev libudev-dev pkg-config
+      - uses: Swatinem/rust-cache@v2
+      - name: Release build
+        run: cargo build --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.bin }}
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Zip each platform
+        run: |
+          cd dist
+          for dir in bubblegum-spin-linux bubblegum-spin-windows; do
+            (cd "$dir" && zip -r "../$dir.zip" .)
+          done
+          ls -l *.zip
+      # `--clobber` makes a re-run of the same tag update the assets instead of failing.
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "BubblegumSpin ${GITHUB_REF_NAME}" \
+            --notes "Native port of Bubblegum Spin (PICO-8, v1.1) by Bee_Randon. Private, non-commercial use only. Windows and Linux binaries below; background music is off by default (\`BGS_MUSIC=1\` turns it on)." \
+            --clobber \
+            dist/bubblegum-spin-windows.zip dist/bubblegum-spin-linux.zip
